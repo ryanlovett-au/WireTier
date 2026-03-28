@@ -20,7 +20,7 @@ test('session encryption should be enabled for production', function () {
         expect(config('session.encrypt'))->toBeTrue(
             'Session encryption is disabled — session data stored unencrypted'
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: Session encryption is disabled — session data is stored unencrypted');
     }
 });
@@ -46,7 +46,7 @@ test('security headers middleware should be configured', function () {
         expect($hasSecurityHeaders)->toBeTrue(
             'No security headers middleware configured in bootstrap/app.php'
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: No security headers middleware (X-Frame-Options, CSP) is configured — clickjacking and content injection possible');
     }
 });
@@ -100,7 +100,7 @@ test('APP_DEBUG defaults to false in env example', function () {
         expect(str_contains($content, 'APP_DEBUG=true'))->toBeFalse(
             '.env.example has APP_DEBUG=true — developers may copy this to production'
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: .env.example has APP_DEBUG=true — production deployments may expose debug information');
     }
 });
@@ -145,7 +145,7 @@ test('password reset token expiry is 30 minutes or less', function () {
         expect($config)->toBeLessThanOrEqual(30,
             "Password reset token expires in {$config} minutes — max recommended is 30"
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped("SECURITY EXPOSURE: Password reset token expires in {$config} minutes — should be 30 or less to limit token reuse window");
     }
 });

@@ -70,7 +70,7 @@ class Security_Audit extends Command
             foreach ($methods as $method => $body) {
                 if (str_contains($body, 'ZerotierToken::findOrFail')) {
                     // Check if there's a team_id scope in the same method
-                    if (! str_contains($body, "team_id") && ! str_contains($body, "->team->") && $method !== 'mount') {
+                    if (! str_contains($body, 'team_id') && ! str_contains($body, '->team->') && $method !== 'mount') {
                         $line = $this->find_line($content, 'ZerotierToken::findOrFail');
                         $this->findings[] = AuditReport::finding(
                             'critical',
@@ -176,10 +176,18 @@ class Security_Audit extends Command
 
             foreach ($methods as $method => $body) {
                 // Skip lifecycle, getters, and non-state-changing methods
-                if (in_array($method, $lifecycle)) continue;
-                if (str_starts_with($method, 'get') && str_ends_with($method, 'Property')) continue;
-                if (str_starts_with($method, 'updated')) continue;
-                if (str_starts_with($method, 'hydrate')) continue;
+                if (in_array($method, $lifecycle)) {
+                    continue;
+                }
+                if (str_starts_with($method, 'get') && str_ends_with($method, 'Property')) {
+                    continue;
+                }
+                if (str_starts_with($method, 'updated')) {
+                    continue;
+                }
+                if (str_starts_with($method, 'hydrate')) {
+                    continue;
+                }
 
                 // Only flag methods that perform writes (API calls, DB updates, redirects)
                 $isWriteMethod = str_contains($body, '->save()')
@@ -193,7 +201,9 @@ class Security_Audit extends Command
                     || str_contains($body, '->post(')
                     || str_contains($body, '->put(');
 
-                if (! $isWriteMethod) continue;
+                if (! $isWriteMethod) {
+                    continue;
+                }
 
                 // Check if method has any authorization check
                 $hasAuth = false;
@@ -311,7 +321,9 @@ class Security_Audit extends Command
     private function scan_ssrf_risk(): void
     {
         $file = app_path('Services/ZerotierService.php');
-        if (! File::exists($file)) return;
+        if (! File::exists($file)) {
+            return;
+        }
 
         $content = File::get($file);
 
@@ -346,7 +358,9 @@ class Security_Audit extends Command
     private function scan_url_parameter_injection(): void
     {
         $file = app_path('Services/ZerotierService.php');
-        if (! File::exists($file)) return;
+        if (! File::exists($file)) {
+            return;
+        }
 
         $content = File::get($file);
 
@@ -408,12 +422,14 @@ class Security_Audit extends Command
     private function scan_session_security(): void
     {
         $file = config_path('session.php');
-        if (! File::exists($file)) return;
+        if (! File::exists($file)) {
+            return;
+        }
 
         $content = File::get($file);
 
         // Session encryption
-        if (str_contains($content, "SESSION_ENCRYPT") && str_contains($content, 'false')) {
+        if (str_contains($content, 'SESSION_ENCRYPT') && str_contains($content, 'false')) {
             $line = $this->find_line($content, 'encrypt');
             $this->findings[] = AuditReport::finding(
                 'medium',
@@ -444,7 +460,9 @@ class Security_Audit extends Command
     private function scan_missing_security_headers(): void
     {
         $file = base_path('bootstrap/app.php');
-        if (! File::exists($file)) return;
+        if (! File::exists($file)) {
+            return;
+        }
 
         $content = File::get($file);
 
@@ -487,7 +505,9 @@ class Security_Audit extends Command
         $routeFiles = [base_path('routes/web.php'), base_path('routes/settings.php')];
 
         foreach ($routeFiles as $file) {
-            if (! File::exists($file)) continue;
+            if (! File::exists($file)) {
+                continue;
+            }
             $content = File::get($file);
 
             if (! str_contains($content, 'throttle') && ! str_contains($content, 'RateLimiter')) {
@@ -527,7 +547,9 @@ class Security_Audit extends Command
     private function scan_password_reset_config(): void
     {
         $file = config_path('auth.php');
-        if (! File::exists($file)) return;
+        if (! File::exists($file)) {
+            return;
+        }
 
         $content = File::get($file);
 
@@ -554,7 +576,9 @@ class Security_Audit extends Command
         $files = [base_path('routes/web.php'), base_path('routes/settings.php')];
 
         foreach ($files as $file) {
-            if (! File::exists($file)) continue;
+            if (! File::exists($file)) {
+                continue;
+            }
             $content = File::get($file);
 
             if (str_contains($content, 'redirect()->back()')) {
@@ -606,7 +630,9 @@ class Security_Audit extends Command
     private function scan_debug_mode(): void
     {
         $file = base_path('.env.example');
-        if (! File::exists($file)) return;
+        if (! File::exists($file)) {
+            return;
+        }
 
         $content = File::get($file);
 
@@ -628,7 +654,9 @@ class Security_Audit extends Command
     private function get_zerotier_blade_files(): array
     {
         $dir = resource_path('views/pages/zerotier');
-        if (! File::isDirectory($dir)) return [];
+        if (! File::isDirectory($dir)) {
+            return [];
+        }
 
         return File::glob($dir.'/*.blade.php');
     }
@@ -636,7 +664,9 @@ class Security_Audit extends Command
     private function get_settings_blade_files(): array
     {
         $dir = resource_path('views/pages/settings');
-        if (! File::isDirectory($dir)) return [];
+        if (! File::isDirectory($dir)) {
+            return [];
+        }
 
         return File::glob($dir.'/*.blade.php');
     }
@@ -668,8 +698,12 @@ class Security_Audit extends Command
                     $depth = 1;
                     $pos = $startOffset;
                     while ($pos < strlen($php) && $depth > 0) {
-                        if ($php[$pos] === '{') $depth++;
-                        if ($php[$pos] === '}') $depth--;
+                        if ($php[$pos] === '{') {
+                            $depth++;
+                        }
+                        if ($php[$pos] === '}') {
+                            $depth--;
+                        }
                         $pos++;
                     }
 
@@ -684,7 +718,9 @@ class Security_Audit extends Command
     private function find_line(string $content, string $needle): int
     {
         $pos = strpos($content, $needle);
-        if ($pos === false) return 0;
+        if ($pos === false) {
+            return 0;
+        }
 
         return substr_count(substr($content, 0, $pos), "\n") + 1;
     }

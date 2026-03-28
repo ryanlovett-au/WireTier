@@ -66,7 +66,7 @@ test('invitation should be single-use', function () {
         expect($invitation)->toBeNull(
             'Invitation still exists after being accepted — replay attack possible'
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: Invitations persist after acceptance — replay attacks are possible');
     }
 });
@@ -89,7 +89,7 @@ test('non-admin cannot invite users to team', function () {
 
     try {
         expect($adminInviteExists)->toBeFalse('Member was able to create an admin invitation');
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: inviteTeam() has no role-based authorization — members can create admin-level invitations');
     }
 });

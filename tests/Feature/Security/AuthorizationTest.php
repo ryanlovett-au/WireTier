@@ -1,7 +1,7 @@
 <?php
 
 use App\Models\User;
-use App\Models\ZerotierToken;
+use App\Models\ZerotierNetwork;
 use Database\Seeders\SecurityTestSeeder;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
@@ -59,7 +59,7 @@ test('viewer cannot create network', function () {
 
     // createNetwork checks isTeamAdmin() and returns early for non-admins
     expect(
-        \App\Models\ZerotierNetwork::where('name', 'Viewer Network')->exists()
+        ZerotierNetwork::where('name', 'Viewer Network')->exists()
     )->toBeFalse('Viewer was able to create a network');
 });
 
@@ -71,7 +71,7 @@ test('viewer cannot save network', function () {
         ->call('saveNetwork');
 
     // saveNetwork checks isTeamAdmin() and returns early for non-admins
-    $network = \App\Models\ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
     expect($network->name)->toBe('Alpha Private Net', 'Viewer was able to edit a network');
 });
 
@@ -83,7 +83,7 @@ test('viewer cannot delete network', function () {
         ->call('deleteNetwork');
 
     expect(
-        \App\Models\ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->exists()
+        ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->exists()
     )->toBeTrue('Viewer was able to delete a network');
 });
 
@@ -109,7 +109,7 @@ test('authorizeMember requires authorization check', function () {
     try {
         // Viewer should NOT be allowed to authorize members
         expect($authorizeCalled)->toBeFalse('Viewer was able to call the ZeroTier API to authorize a member');
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: authorizeMember() has no authorization check — viewers can authorize network members');
     }
 });
@@ -134,7 +134,7 @@ test('deauthorizeMember requires authorization check', function () {
     try {
         // Viewer should NOT be allowed to deauthorize members
         expect($deauthorizeCalled)->toBeFalse('Viewer was able to call the ZeroTier API to deauthorize a member');
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: deauthorizeMember() has no authorization check — viewers can deauthorize network members');
     }
 });
@@ -160,7 +160,7 @@ test('deleteMember requires authorization check', function () {
     try {
         // Viewer should NOT be allowed to delete members
         expect($deleteCalled)->toBeFalse('Viewer was able to call the ZeroTier API to delete a member');
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: deleteMember() has no authorization check — viewers can delete network members');
     }
 });

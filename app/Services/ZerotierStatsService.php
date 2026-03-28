@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\ZerotierNetwork;
-use App\Models\ZerotierToken;
 use Illuminate\Support\Facades\Cache;
 
 class ZerotierStatsService

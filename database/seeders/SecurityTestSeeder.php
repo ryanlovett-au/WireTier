@@ -7,7 +7,6 @@ use App\Models\TeamPermission;
 use App\Models\TeamUser;
 use App\Models\User;
 use App\Models\ZerotierNetwork;
-use App\Models\ZerotierToken;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
@@ -15,13 +14,17 @@ class SecurityTestSeeder extends Seeder
 {
     // Deterministic UUIDs for test references
     const ALPHA_TEAM_ID = '01961111-aaaa-7000-aaaa-aaaaaaaaaaaa';
+
     const BETA_TEAM_ID = '01961111-bbbb-7000-bbbb-bbbbbbbbbbbb';
+
     const ADMIN_TEAM_ID = '01961111-0000-7000-0000-000000000000';
 
     const ALPHA_TOKEN_ID = '01962222-aaaa-7000-aaaa-aaaaaaaaaaaa';
+
     const BETA_TOKEN_ID = '01962222-bbbb-7000-bbbb-bbbbbbbbbbbb';
 
     const ALPHA_NETWORK_ID = 'aaaa000001______';
+
     const BETA_NETWORK_ID = 'bbbb000001______';
 
     public function run(): void

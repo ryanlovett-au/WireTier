@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use Database\Seeders\SecurityTestSeeder;
+use Laravel\Fortify\Features;
 
 beforeEach(function () {
     $this->seed(SecurityTestSeeder::class);
@@ -58,14 +59,13 @@ test('two factor authentication rate limiting works', function () {
     $response->assertStatus(429);
 });
 
-
 test('password confirmation required for security settings', function () {
     $user = User::factory()->create();
     $this->actingAs($user);
 
     // If password confirm is enabled, should redirect
-    if (\Laravel\Fortify\Features::optionEnabled(
-        \Laravel\Fortify\Features::twoFactorAuthentication(), 'confirmPassword'
+    if (Features::optionEnabled(
+        Features::twoFactorAuthentication(), 'confirmPassword'
     )) {
         $this->get(route('security.edit'))
             ->assertRedirect(route('password.confirm'));
@@ -111,7 +111,7 @@ test('registration creates verified user only when email verification passes', f
     expect($user)->not->toBeNull();
 
     // User should be unverified initially (if email verification is enabled)
-    if (class_exists(\Laravel\Fortify\Features::class) && in_array('email-verification', config('fortify.features', []))) {
+    if (class_exists(Features::class) && in_array('email-verification', config('fortify.features', []))) {
         expect($user->email_verified_at)->toBeNull();
     }
 });

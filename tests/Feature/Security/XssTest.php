@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\ZerotierToken;
 use Illuminate\Support\Facades\File;
 
 test('blade templates do not use unescaped output with user data', function () {
@@ -28,7 +29,7 @@ test('blade templates do not use unescaped output with user data', function () {
         expect($findings)->toBeEmpty(
             "Unescaped output found:\n".implode("\n", $findings)
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: Blade templates use unescaped {!! !!} output — XSS vulnerability in: '.implode(', ', $findings));
     }
 });
@@ -57,7 +58,7 @@ test('addslashes is not used for escaping in blade templates', function () {
         expect($findings)->toBeEmpty(
             "addslashes() found (use @json() instead):\n".implode("\n", $findings)
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: Blade templates use addslashes() instead of @json() for escaping — insufficient XSS protection in: '.implode(', ', $findings));
     }
 });
@@ -91,7 +92,7 @@ test('exception messages are not displayed directly to users', function () {
         expect($findings)->toBeEmpty(
             "Exception messages exposed to users:\n".implode("\n", $findings)
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: Exception messages ($e->getMessage()) are displayed directly to users — information disclosure in: '.implode(', ', $findings));
     }
 });
@@ -121,13 +122,13 @@ test('inline JavaScript does not interpolate blade variables unsafely', function
         expect($findings)->toBeEmpty(
             "Unsafe JS interpolation found:\n".implode("\n", $findings)
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: Blade variables are interpolated unsafely in inline JavaScript — XSS vulnerability in: '.implode(', ', $findings));
     }
 });
 
 test('ZerotierToken hides token value from serialization', function () {
-    $token = \App\Models\ZerotierToken::factory()->create();
+    $token = ZerotierToken::factory()->create();
     $array = $token->toArray();
 
     expect($array)->not->toHaveKey('token',

@@ -1,7 +1,6 @@
 <?php
 
 use App\Models\Team;
-use App\Models\TeamUser;
 use App\Models\User;
 use App\Models\ZerotierNetwork;
 use App\Models\ZerotierToken;
@@ -45,7 +44,7 @@ test('tokens page only loads tokens for admin team', function () {
                 "Token '{$token->name}' belongs to team {$token->team_id} but user's team is {$this->superAdmin->current_team}"
             );
         }
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: ZerotierToken::all() is not scoped to current team — tokens from other teams are visible');
     }
 });
@@ -64,7 +63,7 @@ test('testToken cannot access another teams token', function () {
 
     try {
         expect($betaToken->node_address)->toBe('bbbb000001', 'Beta token node_address was modified by another team');
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: testToken() does not verify team ownership — cross-team token testing is possible');
     }
 });
@@ -82,7 +81,7 @@ test('toggleToken cannot toggle another teams token', function () {
 
     try {
         expect($betaToken->is_active)->toBe($originalActive, 'Beta token was toggled by another team');
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: toggleToken() does not verify team ownership — cross-team token toggling is possible');
     }
 });
@@ -98,7 +97,7 @@ test('deleteToken cannot delete another teams token', function () {
         expect(ZerotierToken::find(SecurityTestSeeder::BETA_TOKEN_ID))->not->toBeNull(
             'Beta token was deleted by another team'
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: deleteToken() does not verify team ownership — cross-team token deletion is possible');
     }
 });
@@ -116,7 +115,7 @@ test('updateToken cannot update another teams token', function () {
 
     try {
         expect($betaToken->name)->not->toBe('HACKED', 'Beta token name was changed by another team');
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: updateToken() does not verify team ownership — cross-team token updates are possible');
     }
 });
@@ -151,7 +150,7 @@ test('loadNetworks cannot use another teams token', function () {
         expect($component->get('networks'))->toBeEmpty(
             'Networks were loaded using another team\'s token'
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: loadNetworks() does not verify team ownership of selectedToken — cross-team token usage is possible');
     }
 });
@@ -176,7 +175,7 @@ test('saveNetwork cannot modify another teams network record', function () {
         expect($betaNetwork->name)->toBe($originalName,
             'Beta network name was changed by Alpha team user'
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: saveNetwork() does not scope ZerotierNetwork updates by team_id — cross-team network modification is possible');
     }
 });
@@ -195,7 +194,7 @@ test('deleteNetwork cannot delete another teams network record', function () {
         expect(ZerotierNetwork::where('network_id', SecurityTestSeeder::BETA_NETWORK_ID)->exists())->toBeTrue(
             'Beta network was deleted by Alpha team user'
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: deleteNetwork() does not scope ZerotierNetwork deletes by team_id — cross-team network deletion is possible');
     }
 });
@@ -217,7 +216,7 @@ test('members page rejects token from another team', function () {
         // Should be blocked — the token doesn't belong to Alpha team
         // If we reach here without exception, the component mounted successfully (vulnerability)
         $this->fail('Members page allowed access with another team\'s token');
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         if (str_contains($e->getMessage(), 'SECURITY EXPOSURE') || str_contains($e->getMessage(), 'allowed access')) {
             $this->markTestSkipped('SECURITY EXPOSURE: Members page mount() does not verify team ownership of tokenId — cross-team access is possible');
         }
@@ -239,7 +238,7 @@ test('peers page only loads tokens from current team', function () {
                 "Peers page loaded token '{$token->name}' from team {$token->team_id}"
             );
         }
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: Peers page does not scope token loading to current team — tokens from other teams are visible');
     }
 });

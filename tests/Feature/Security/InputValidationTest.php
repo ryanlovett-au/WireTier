@@ -29,7 +29,7 @@ test('ZerotierService rejects internal IP addresses as host', function () {
             $service = new ZerotierService($token);
             // If no exception was thrown, the internal host was accepted
             $accepted[] = $host;
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             // Expected: service should throw for internal hosts
         }
     }
@@ -38,7 +38,7 @@ test('ZerotierService rejects internal IP addresses as host', function () {
         expect($accepted)->toBeEmpty(
             'ZerotierService accepted internal hosts: '.implode(', ', $accepted)
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: ZerotierService does not validate host URLs — SSRF via internal IPs is possible');
     }
 });
@@ -59,7 +59,7 @@ test('ZerotierService rejects non-HTTP schemes', function () {
             $service = new ZerotierService($token);
             // If no exception was thrown, the bad scheme was accepted
             $accepted[] = $host;
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             // Expected: service should throw for non-http(s) schemes
         }
     }
@@ -68,7 +68,7 @@ test('ZerotierService rejects non-HTTP schemes', function () {
         expect($accepted)->toBeEmpty(
             'ZerotierService accepted non-HTTP schemes: '.implode(', ', $accepted)
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: ZerotierService does not validate URL schemes — non-HTTP protocols are accepted');
     }
 });
@@ -93,7 +93,7 @@ test('network ID parameter should be validated as hex format', function () {
             // After fix: service should validate network ID is 16-char hex
             $service->getControllerNetwork($id);
             $accepted[] = $id;
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             // Expected: service should reject malicious IDs
         }
     }
@@ -102,7 +102,7 @@ test('network ID parameter should be validated as hex format', function () {
         expect($accepted)->toBeEmpty(
             'ZerotierService accepted malicious network IDs: '.implode(', ', $accepted)
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: networkId parameter is not validated — path traversal and injection via malicious network IDs is possible');
     }
 });
@@ -126,7 +126,7 @@ test('node ID parameter should be validated as hex format', function () {
             // After fix: service should validate node ID is 10-char hex
             $service->getNetworkMember('aaaaaaaaaaaaaaaa', $id);
             $accepted[] = $id;
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             // Expected: service should reject malicious IDs
         }
     }
@@ -135,7 +135,7 @@ test('node ID parameter should be validated as hex format', function () {
         expect($accepted)->toBeEmpty(
             'ZerotierService accepted malicious node IDs: '.implode(', ', $accepted)
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: nodeId parameter is not validated — path traversal and injection via malicious node IDs is possible');
     }
 });
@@ -148,7 +148,7 @@ test('ZerotierService does not fall back to localhost when token is empty', func
         // After fix: should throw an exception instead
         $service = new ZerotierService($token);
         $this->fail('ZerotierService accepted an empty token without throwing');
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         if (str_contains($e->getMessage(), 'accepted an empty token')) {
             $this->markTestSkipped('SECURITY EXPOSURE: ZerotierService falls back to localhost:9993 when token is empty — unintended local controller access');
         }
@@ -170,7 +170,7 @@ test('host URL validation rejects DNS rebinding targets', function () {
             $service = new ZerotierService($token);
             // If no exception was thrown, the DNS rebinding host was accepted
             $accepted[] = $host;
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             // Expected: service should resolve DNS and reject hosts that resolve to internal IPs
         }
     }
@@ -179,7 +179,7 @@ test('host URL validation rejects DNS rebinding targets', function () {
         expect($accepted)->toBeEmpty(
             'ZerotierService accepted DNS rebinding hosts: '.implode(', ', $accepted)
         );
-    } catch (\Throwable $e) {
+    } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: ZerotierService does not check DNS resolution — SSRF via DNS rebinding is possible');
     }
 });
