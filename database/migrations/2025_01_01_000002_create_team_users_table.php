@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('team_users', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('team_id');
-            $table->foreignId('user_id');
+            $table->foreignUuid('user_id');
             $table->string('role')->default('member');
             $table->date('expires')->nullable();
             $table->timestamps();

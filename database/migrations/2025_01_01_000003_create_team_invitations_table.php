@@ -14,7 +14,7 @@ return new class extends Migration
             $table->string('email');
             $table->string('role')->default('member');
             $table->date('expires')->nullable();
-            $table->foreignId('referer')->nullable();
+            $table->foreignUuid('referer')->nullable();
             $table->timestamps();
 
             $table->index('email');
