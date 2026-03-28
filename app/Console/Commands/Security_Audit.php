@@ -463,6 +463,21 @@ class Security_Audit extends Command
                 'Add middleware to set X-Frame-Options: DENY, X-Content-Type-Options: nosniff, Strict-Transport-Security, and Content-Security-Policy'
             );
         }
+
+        // Check Livewire update endpoint is behind auth
+        $hasProtectedUpdate = str_contains($content, 'setUpdateRoute')
+            && str_contains($content, "'auth'");
+
+        if (! $hasProtectedUpdate) {
+            $this->findings[] = AuditReport::finding(
+                'high',
+                'Livewire Update Endpoint',
+                $file,
+                0,
+                'Livewire update endpoint is not restricted to authenticated users — unauthenticated requests can interact with Livewire components',
+                "Add Livewire::setUpdateRoute() in bootstrap/app.php with ['web', 'auth'] middleware"
+            );
+        }
     }
 
     // ─── Scan: Rate limiting gaps ────────────────────────────────────

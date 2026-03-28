@@ -121,6 +121,23 @@ test('sensitive routes require email verification', function () {
     $this->get(route('teams.index'))->assertRedirect('/email/verify');
 });
 
+test('livewire update endpoint requires authentication', function () {
+    // Unauthenticated POST to the Livewire update endpoint should redirect to login
+    $response = $this->post('/livewire/update', []);
+    $response->assertRedirect('/login');
+});
+
+test('livewire update endpoint is protected via setUpdateRoute', function () {
+    $content = File::get(base_path('bootstrap/app.php'));
+
+    $hasProtectedUpdate = str_contains($content, 'setUpdateRoute')
+        && str_contains($content, "'auth'");
+
+    expect($hasProtectedUpdate)->toBeTrue(
+        'Livewire update endpoint is not restricted to authenticated users'
+    );
+});
+
 test('password reset token expiry is 30 minutes or less', function () {
     $config = config('auth.passwords.users.expire');
 
