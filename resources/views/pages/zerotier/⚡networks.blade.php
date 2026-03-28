@@ -11,6 +11,10 @@ new #[Title('ZeroTier Networks')] class extends Component {
     public array $networks = [];
     public string $selectedToken = '';
 
+    // Delete confirmation
+    public string $delete_network_id = '';
+    public string $delete_network_name = '';
+
     // Create network form
     public string $new_network_name = '';
     public bool $new_network_private = true;
@@ -84,7 +88,8 @@ new #[Title('ZeroTier Networks')] class extends Component {
                 try {
                     $network = $service->getControllerNetwork($networkId);
                     $members = $service->getNetworkMembers($networkId);
-                    $network['_member_count'] = count($members);
+                    $network['_member_count']        = collect($members)->where('authorized', true)->count();
+                    $network['_pending_count']        = collect($members)->where('authorized', false)->count();
                     $this->networks[] = $network;
                 } catch (\Exception $e) {
                     // Skip networks that error
@@ -162,7 +167,18 @@ new #[Title('ZeroTier Networks')] class extends Component {
         }
     }
 
-    public function deleteNetwork($networkId): void
+    public function confirmDeleteNetwork(string $networkId, string $networkName): void
+    {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
+        $this->delete_network_id   = $networkId;
+        $this->delete_network_name = $networkName ?: $networkId;
+        Flux::modal('deleteNetworkModal')->show();
+    }
+
+    public function deleteNetwork(): void
     {
         if (! auth()->user()->isTeamAdmin()) {
             return;
@@ -172,9 +188,12 @@ new #[Title('ZeroTier Networks')] class extends Component {
         $service = new ZerotierService($token);
 
         try {
-            $service->deleteNetwork($networkId);
-            ZerotierNetwork::where('network_id', $networkId)->delete();
+            $service->deleteNetwork($this->delete_network_id);
+            ZerotierNetwork::where('network_id', $this->delete_network_id)->delete();
+            Flux::modal('deleteNetworkModal')->close();
             Flux::toast(variant: 'success', heading: 'Deleted', text: 'Network has been deleted.');
+            $this->delete_network_id   = '';
+            $this->delete_network_name = '';
             $this->loadNetworks();
         } catch (\Exception $e) {
             Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to delete network: '.$e->getMessage());
@@ -224,7 +243,7 @@ new #[Title('ZeroTier Networks')] class extends Component {
             <div class="grid gap-4">
                 @foreach ($networks as $network)
                 <flux:card>
-                    <div class="flex items-center justify-between">
+                    <div class="flex items-end justify-between">
                         <div>
                             <div class="flex items-center gap-3">
                                 <flux:heading size="lg">{{ $network['name'] ?? 'Unnamed' }}</flux:heading>
@@ -246,7 +265,10 @@ new #[Title('ZeroTier Networks')] class extends Component {
                                         <flux:icon x-show="copied" name="clipboard-document-check" class="size-3.5 text-green-500" />
                                     </span>
                                 </span>
-                                <span>{{ $network['_member_count'] ?? 0 }} members</span>
+                                <flux:badge color="zinc" size="sm">{{ $network['_member_count'] ?? 0 }} members</flux:badge>
+                                @if (($network['_pending_count'] ?? 0) > 0)
+                                    <flux:badge color="orange" size="sm">{{ $network['_pending_count'] }} pending</flux:badge>
+                                @endif
                                 @if (! empty($network['routes']))
                                     @foreach ($network['routes'] as $route)
                                         <span class="font-mono">{{ $route['target'] ?? '' }}</span>
@@ -259,9 +281,7 @@ new #[Title('ZeroTier Networks')] class extends Component {
                                 Members
                             </flux:button>
                             @if (auth()->user()->isTeamAdmin())
-                                <flux:button size="sm" icon="trash" variant="danger" wire:click="deleteNetwork('{{ $network['nwid'] ?? $network['id'] }}')" wire:confirm="Are you sure you want to delete this network?">
-                                    Delete
-                                </flux:button>
+                                <flux:button size="sm" icon="trash" variant="danger" wire:click="confirmDeleteNetwork('{{ $network['nwid'] ?? $network['id'] }}', '{{ addslashes($network['name'] ?? '') }}')" />
                             @endif
                         </div>
                     </div>
@@ -269,6 +289,26 @@ new #[Title('ZeroTier Networks')] class extends Component {
                 @endforeach
             </div>
         @endif
+
+        {{-- Delete Network Modal --}}
+        <flux:modal name="deleteNetworkModal" focusable class="max-w-sm">
+            <div class="w-14 h-14 rounded-full bg-red-100 p-4 mt-4 mb-4 mx-auto flex items-center justify-center">
+                <flux:icon name="trash" class="size-6 text-red-600" />
+            </div>
+
+            <flux:heading size="lg" class="text-center">Delete Network?</flux:heading>
+            <flux:subheading class="text-center mt-2 mb-6">
+                Are you sure you want to delete <strong>{{ $delete_network_name }}</strong>?
+                This cannot be undone.
+            </flux:subheading>
+
+            <div class="flex justify-end gap-2">
+                <flux:modal.close>
+                    <flux:button variant="filled">Cancel</flux:button>
+                </flux:modal.close>
+                <flux:button variant="danger" wire:click="deleteNetwork">Delete</flux:button>
+            </div>
+        </flux:modal>
 
         {{-- Create Network Modal --}}
         <flux:modal name="createNetworkModal" focusable class="w-[480px]">
