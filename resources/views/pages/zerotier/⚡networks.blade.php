@@ -192,13 +192,23 @@ new #[Title('ZeroTier Networks')] class extends Component {
                             <div class="flex items-center gap-3">
                                 <flux:heading size="lg">{{ $network['name'] ?? 'Unnamed' }}</flux:heading>
                                 @if ($network['private'] ?? true)
-                                    <flux:badge color="amber" size="sm">Private</flux:badge>
+                                    <flux:badge color="green" size="sm">Private</flux:badge>
                                 @else
-                                    <flux:badge color="green" size="sm">Public</flux:badge>
+                                    <flux:badge color="red" size="sm">Public</flux:badge>
                                 @endif
                             </div>
                             <div class="flex items-center gap-4 mt-2 text-sm text-zinc-500">
-                                <span class="font-mono">{{ $network['nwid'] ?? $network['id'] ?? '—' }}</span>
+                                <span class="font-mono flex items-center gap-1">
+                                    {{ $network['nwid'] ?? $network['id'] ?? '—' }}
+                                    <span
+                                        x-data="{ copied: false }"
+                                        x-on:click.stop="navigator.clipboard.writeText('{{ $network['nwid'] ?? $network['id'] ?? '' }}'); copied = true; setTimeout(() => copied = false, 2000)"
+                                        class="cursor-pointer"
+                                    >
+                                        <flux:icon x-show="!copied" name="clipboard" class="size-3.5 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors" />
+                                        <flux:icon x-show="copied" name="clipboard-document-check" class="size-3.5 text-green-500" />
+                                    </span>
+                                </span>
                                 <span>{{ $network['_member_count'] ?? 0 }} members</span>
                                 @if (! empty($network['routes']))
                                     @foreach ($network['routes'] as $route)
