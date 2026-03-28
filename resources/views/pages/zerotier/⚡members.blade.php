@@ -149,15 +149,21 @@ new #[Title('Network Members')] class extends Component {
                     <flux:button size="sm" icon="arrow-left" variant="ghost" :href="route('zerotier.networks')" wire:navigate />
                     <flux:heading size="xl">{{ $network['name'] ?? 'Network' }}</flux:heading>
                 </div>
-                <flux:subheading>
-                    <span class="font-mono">{{ $networkId }}</span> &mdash;
-                    {{ count($members) }} member(s)
+                <div class="flex items-center gap-2 flex-wrap mt-1">
+                    <span class="font-mono text-sm text-zinc-500">{{ $networkId }}</span>
+                    <flux:badge color="zinc" size="sm">
+                        {{ collect($members)->where('authorized', true)->count() }} members
+                    </flux:badge>
+                    @php $pending = collect($members)->where('authorized', false)->count(); @endphp
+                    @if ($pending > 0)
+                        <flux:badge color="orange" size="sm">{{ $pending }} pending</flux:badge>
+                    @endif
                     @if (! empty($network['routes']))
                         @foreach ($network['routes'] as $route)
-                            &mdash; <span class="font-mono">{{ $route['target'] ?? '' }}</span>
+                            <span class="font-mono text-sm text-zinc-400">{{ $route['target'] ?? '' }}</span>
                         @endforeach
                     @endif
-                </flux:subheading>
+                </div>
             </div>
             <flux:button size="sm" icon="arrow-path" wire:click="loadMembers">Refresh</flux:button>
         </div>
