@@ -19,6 +19,7 @@
     </style>
 </head>
 <body class="min-h-screen bg-zinc-950 text-zinc-100 antialiased" style="font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;">
+@php $promo = env('PROMO_MODE', false); @endphp
 
     {{-- Nav --}}
     <header class="fixed top-0 left-0 right-0 z-50 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur-sm">
@@ -30,7 +31,13 @@
                 <span class="font-semibold text-zinc-100">Wiretier</span>
             </a>
             <nav class="flex items-center gap-3">
-                @auth
+                @if($promo)
+                    <a href="https://github.com/ryanlovett/wiretier" target="_blank"
+                       class="text-sm font-medium text-white rounded-lg bg-orange-500 hover:bg-orange-600 transition-colors no-underline"
+                       style="padding:6px 16px;">
+                        View on GitHub
+                    </a>
+                @elseauth
                     <a href="{{ route('dashboard') }}"
                        class="text-sm font-medium text-white rounded-lg bg-orange-500 hover:bg-orange-600 transition-colors no-underline"
                        style="padding:6px 16px;">
@@ -91,7 +98,13 @@
                 </p>
 
                 <div class="flex flex-wrap items-center justify-center gap-3">
-                    @auth
+                    @if($promo)
+                        <a href="https://github.com/ryanlovett/wiretier" target="_blank"
+                           class="inline-flex items-center font-medium text-white rounded-xl bg-orange-500 hover:bg-orange-600 transition-colors no-underline"
+                           style="padding:12px 28px;box-shadow:0 4px 16px rgba(249,115,22,0.25);">
+                            View on GitHub
+                        </a>
+                    @elseauth
                         <a href="{{ route('dashboard') }}"
                            class="inline-flex items-center font-medium text-white rounded-xl bg-orange-500 hover:bg-orange-600 transition-colors no-underline"
                            style="padding:12px 28px;box-shadow:0 4px 16px rgba(249,115,22,0.25);">
@@ -214,7 +227,13 @@
                     Set up Wiretier on your own infrastructure and start managing your ZeroTier networks in minutes.
                 </p>
                 <div class="flex flex-wrap items-center justify-center gap-3">
-                    @auth
+                    @if($promo)
+                        <a href="https://github.com/ryanlovett/wiretier" target="_blank"
+                           class="inline-flex items-center font-medium text-white rounded-xl bg-orange-500 hover:bg-orange-600 transition-colors no-underline"
+                           style="padding:12px 28px;box-shadow:0 4px 16px rgba(249,115,22,0.25);">
+                            View on GitHub
+                        </a>
+                    @elseauth
                         <a href="{{ route('dashboard') }}"
                            class="inline-flex items-center font-medium text-white rounded-xl bg-orange-500 hover:bg-orange-600 transition-colors no-underline"
                            style="padding:12px 28px;box-shadow:0 4px 16px rgba(249,115,22,0.25);">
