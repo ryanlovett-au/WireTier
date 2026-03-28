@@ -283,8 +283,7 @@ new #[Title('Network Members')] class extends Component {
                             <flux:table.cell class="text-xs text-zinc-500">
                                 <div>v{{ ($member['vMajor'] ?? '?') }}.{{ ($member['vMinor'] ?? '?') }}.{{ ($member['vRev'] ?? '?') }}</div>
                                 @if (! empty($member['_physicalAddr']))
-                                    @php $ip = explode('/', $member['_physicalAddr'])[0]; // strip port @endphp
-                                    <div class="font-mono">{{ $ip }}</div>
+                                    <div class="font-mono">{{ $member['_physicalAddr'] }}</div>
                                 @endif
                                 @php $latency = $member['_latency'] ?? -1; @endphp
                                 @if ($latency > 0)
