@@ -466,32 +466,53 @@ new #[Title('ZeroTier Networks')] class extends Component {
 
             {{-- Routes Panel --}}
             <div x-show="$wire.edit_tab === 'routes'" class="min-h-[220px]">
+
                 @if (count($edit_routes) > 0)
-                    <div class="space-y-2 mb-5">
-                        @foreach ($edit_routes as $i => $route)
-                            <div class="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
-                                <flux:icon name="arrow-right-circle" class="size-4 text-zinc-400 shrink-0" />
-                                <span class="font-mono text-sm flex-1">
-                                    {{ $route['target'] }}
-                                    @if (! empty($route['via']))
-                                        <span class="text-zinc-400"> via {{ $route['via'] }}</span>
-                                    @endif
-                                </span>
-                                <flux:button size="xs" icon="x-mark" variant="ghost" wire:click="removeRoute({{ $i }})" />
-                            </div>
-                        @endforeach
-                    </div>
+                    <table class="w-full text-sm mb-5">
+                        <thead>
+                            <tr class="border-b border-zinc-200 dark:border-zinc-700">
+                                <th class="text-left py-2 px-2 text-xs font-semibold text-zinc-400 uppercase tracking-wide w-8"></th>
+                                <th class="text-left py-2 px-2 text-xs font-semibold text-zinc-400 uppercase tracking-wide">Target</th>
+                                <th class="text-left py-2 px-2 text-xs font-semibold text-zinc-400 uppercase tracking-wide">Via</th>
+                                <th class="w-8"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($edit_routes as $i => $route)
+                                <tr class="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                                    <td class="py-2.5 px-2">
+                                        <flux:icon name="arrow-right-circle" class="size-4 text-zinc-400" />
+                                    </td>
+                                    <td class="py-2.5 px-2 font-mono">{{ $route['target'] }}</td>
+                                    <td class="py-2.5 px-2 font-mono">
+                                        @if (! empty($route['via']))
+                                            {{ $route['via'] }}
+                                        @else
+                                            <span class="text-zinc-400 italic">(LAN)</span>
+                                        @endif
+                                    </td>
+                                    <td class="py-2.5 px-2 text-right">
+                                        <flux:button size="xs" icon="trash" variant="ghost" class="text-red-400 hover:text-red-600" wire:click="removeRoute({{ $i }})" />
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
                 @else
                     <p class="text-sm text-zinc-400 italic mb-5">No managed routes configured.</p>
                 @endif
 
                 <p class="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500 mb-3">Add Route</p>
-                <div class="grid grid-cols-2 gap-3">
-                    <flux:input wire:model="new_route_target" label="Destination (CIDR)" placeholder="10.0.0.0/8" />
-                    <flux:input wire:model="new_route_via" label="Via (optional gateway)" placeholder="10.147.17.1" />
-                </div>
-                <div class="mt-6">
-                    <flux:button size="sm" icon="plus" wire:click="addRoute">Add Route</flux:button>
+                <div class="flex items-end gap-2">
+                    <div class="flex-1">
+                        <flux:input wire:model="new_route_target" label="Destination (CIDR)" placeholder="10.0.0.0/8" />
+                    </div>
+                    <div class="flex-1">
+                        <flux:input wire:model="new_route_via" label="Via (leave blank for LAN)" placeholder="10.147.17.1" />
+                    </div>
+                    <div class="pb-0.5">
+                        <flux:button icon="plus" wire:click="addRoute" tooltip="Add Route" />
+                    </div>
                 </div>
             </div>
 
