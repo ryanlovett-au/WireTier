@@ -103,18 +103,26 @@
                             <div class="flex items-center justify-between">
                                 <div>
                                     <div class="font-medium text-sm">{{ $network->name ?? 'Unnamed' }}</div>
-                                    <div class="text-xs text-zinc-500 font-mono">{{ $network->network_id }}</div>
+                                    <div class="text-xs text-zinc-500 font-mono flex items-center gap-1">
+                                        {{ $network->network_id }}
+                                        <span
+                                            x-data="{ copied: false }"
+                                            x-on:click.stop="navigator.clipboard.writeText('{{ $network->network_id }}'); copied = true; setTimeout(() => copied = false, 2000)"
+                                            class="cursor-pointer"
+                                        >
+                                            <flux:icon x-show="!copied" name="clipboard" class="size-3 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors" />
+                                            <flux:icon x-show="copied" name="clipboard-document-check" class="size-3 text-green-500" />
+                                        </span>
+                                    </div>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    @if (isset($ztStats['by_network'][$network->network_id]))
-                                        <flux:badge color="zinc" size="sm">
-                                            {{ $ztStats['by_network'][$network->network_id] }} devices
-                                        </flux:badge>
-                                    @endif
+                                    <flux:badge color="zinc" size="sm">
+                                        {{ $ztStats['by_network'][$network->network_id] ?? 0 }} members
+                                    </flux:badge>
                                     @if ($network->private)
-                                        <flux:badge color="amber" size="sm">Private</flux:badge>
+                                        <flux:badge color="green" size="sm">Private</flux:badge>
                                     @else
-                                        <flux:badge color="green" size="sm">Public</flux:badge>
+                                        <flux:badge color="red" size="sm">Public</flux:badge>
                                     @endif
                                 </div>
                             </div>
