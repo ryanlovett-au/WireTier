@@ -58,9 +58,29 @@ new #[Title('Network Members')] class extends Component {
             $memberIds = $service->getNetworkMembers($this->networkId);
             $this->members = [];
 
+            // Index peers by address for cross-referencing online status
+            try {
+                $peers = collect($service->getPeers())->keyBy('address');
+            } catch (\Exception) {
+                $peers = collect();
+            }
+
             foreach (array_keys($memberIds) as $nodeId) {
                 try {
                     $member = $service->getNetworkMember($this->networkId, $nodeId);
+
+                    // Enrich with live peer data if available
+                    if ($peer = $peers->get($nodeId)) {
+                        $activePaths = collect($peer['paths'] ?? [])->where('active', true);
+                        $member['_online']       = $activePaths->isNotEmpty();
+                        $member['_latency']      = $peer['latency'] ?? -1;
+                        $member['_physicalAddr'] = $activePaths->first()['address'] ?? ($peer['physicalAddress'] ?? null);
+                    } else {
+                        $member['_online']       = false;
+                        $member['_latency']      = $member['latency'] ?? -1;
+                        $member['_physicalAddr'] = $member['physicalAddr'] ?? null;
+                    }
+
                     $this->members[] = $member;
                 } catch (\Exception $e) {
                     // Skip members that error
@@ -229,25 +249,27 @@ new #[Title('Network Members')] class extends Component {
                                 @endif
                             </flux:table.cell>
                             <flux:table.cell class="text-xs">
-                                @php
-                                    $lastOnlineSec = ($member['lastOnline'] ?? 0) / 1000;
-                                    $isOnline = $lastOnlineSec > 0 && (time() - $lastOnlineSec) < 300;
-                                @endphp
-                                @if ($isOnline)
+                                @if ($member['_online'] ?? false)
                                     <span style="color:#16a34a;font-weight:600;">Online</span>
-                                @elseif ($lastOnlineSec > 0)
-                                    <span class="text-zinc-400">{{ \Carbon\Carbon::createFromTimestamp($lastOnlineSec)->diffForHumans() }}</span>
                                 @else
-                                    <span class="text-zinc-400">Never</span>
+                                    @php
+                                        $lastOnlineSec = ($member['lastOnline'] ?? 0) / 1000;
+                                    @endphp
+                                    @if ($lastOnlineSec > 0)
+                                        <span class="text-zinc-400">{{ \Carbon\Carbon::createFromTimestamp($lastOnlineSec)->diffForHumans() }}</span>
+                                    @else
+                                        <span class="text-zinc-400">Never</span>
+                                    @endif
                                 @endif
                             </flux:table.cell>
                             <flux:table.cell class="text-xs text-zinc-500">
                                 <div>v{{ ($member['vMajor'] ?? '?') }}.{{ ($member['vMinor'] ?? '?') }}.{{ ($member['vRev'] ?? '?') }}</div>
-                                @if (! empty($member['physicalAddr']))
-                                    <div class="font-mono">{{ $member['physicalAddr'] }}</div>
+                                @if (! empty($member['_physicalAddr']))
+                                    <div class="font-mono">{{ $member['_physicalAddr'] }}</div>
                                 @endif
-                                @if (isset($member['latency']) && $member['latency'] >= 0)
-                                    <div>({{ $member['latency'] }} ms)</div>
+                                @php $latency = $member['_latency'] ?? -1; @endphp
+                                @if ($latency >= 0)
+                                    <div>{{ $latency }} ms</div>
                                 @endif
                             </flux:table.cell>
                             <flux:table.cell>
