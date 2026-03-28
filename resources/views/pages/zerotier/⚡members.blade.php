@@ -14,7 +14,9 @@ new #[Title('Network Members')] class extends Component {
     // Edit member
     public string $edit_member_id = '';
     public string $edit_member_name = '';
-    public array $edit_ip_assignments = [];
+    public array  $edit_ip_assignments = [];
+    public bool   $edit_active_bridge = false;
+    public bool   $edit_no_auto_assign = false;
     public string $new_ip = '';
 
     public function mount(string $networkId, string $tokenId)
@@ -103,9 +105,11 @@ new #[Title('Network Members')] class extends Component {
     {
         try {
             $member = $this->getService()->getNetworkMember($this->networkId, $nodeId);
-            $this->edit_member_id = $nodeId;
-            $this->edit_member_name = $member['name'] ?? '';
-            $this->edit_ip_assignments = $member['ipAssignments'] ?? [];
+            $this->edit_member_id       = $nodeId;
+            $this->edit_member_name     = $member['name'] ?? '';
+            $this->edit_ip_assignments  = $member['ipAssignments'] ?? [];
+            $this->edit_active_bridge   = $member['activeBridge'] ?? false;
+            $this->edit_no_auto_assign  = $member['noAutoAssignIps'] ?? false;
             $this->new_ip = '';
             Flux::modal('editMemberModal')->show();
         } catch (\Exception $e) {
@@ -131,7 +135,9 @@ new #[Title('Network Members')] class extends Component {
     {
         try {
             $this->getService()->updateNetworkMember($this->networkId, $this->edit_member_id, [
-                'ipAssignments' => $this->edit_ip_assignments,
+                'ipAssignments'   => $this->edit_ip_assignments,
+                'activeBridge'    => $this->edit_active_bridge,
+                'noAutoAssignIps' => $this->edit_no_auto_assign,
             ]);
             Flux::modal('editMemberModal')->close();
             Flux::toast(variant: 'success', heading: 'Updated', text: 'Member settings have been updated.');
@@ -216,7 +222,7 @@ new #[Title('Network Members')] class extends Component {
                             <flux:table.cell>
                                 <div class="flex gap-1">
                                     @if (! ($member['authorized'] ?? false))
-                                        <flux:button size="xs" icon="check" variant="primary" tooltip="Authorize" wire:click="authorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
+                                        <flux:button size="xs" icon="check" style="background:#16a34a;color:#fff;border-color:#16a34a;" tooltip="Authorize" wire:click="authorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
                                     @else
                                         <flux:button size="xs" icon="x-mark" tooltip="Deauthorize" wire:click="deauthorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
                                     @endif
@@ -253,7 +259,16 @@ new #[Title('Network Members')] class extends Component {
                 </div>
             </div>
 
-            <div class="flex justify-end space-x-2">
+            <div class="space-y-4 mt-5 pt-5 border-t border-zinc-100 dark:border-zinc-700">
+                <flux:switch wire:model="edit_active_bridge"
+                    label="Allow Ethernet Bridging"
+                    description="Allow this member to bridge other Ethernet segments into the network" />
+                <flux:switch wire:model="edit_no_auto_assign"
+                    label="Do Not Auto-Assign IPs"
+                    description="Prevent ZeroTier from automatically assigning an IP to this member" />
+            </div>
+
+            <div class="flex justify-end space-x-2 mt-6">
                 <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>
                 <flux:button variant="primary" wire:click="saveMember()">Save</flux:button>
             </div>
