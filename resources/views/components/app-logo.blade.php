@@ -2,16 +2,9 @@
     'sidebar' => false,
 ])
 
-@if($sidebar)
-    <flux:sidebar.brand name="{{ config('app.name') }}" {{ $attributes }}>
-        <x-slot name="logo" class="flex aspect-square size-8 items-center justify-center rounded-md bg-accent-content text-accent-foreground">
-            <x-app-logo-icon class="size-5 fill-current text-white dark:text-black" />
-        </x-slot>
-    </flux:sidebar.brand>
-@else
-    <flux:brand name="{{ config('app.name') }}" {{ $attributes }}>
-        <x-slot name="logo" class="flex aspect-square size-8 items-center justify-center rounded-md bg-accent-content text-accent-foreground">
-            <x-app-logo-icon class="size-5 fill-current text-white dark:text-black" />
-        </x-slot>
-    </flux:brand>
-@endif
+<a href="{{ $attributes->get('href', '/') }}" wire:navigate class="flex items-center gap-3 px-1 py-1 rounded-lg no-underline">
+    <div style="display:flex;aspect-ratio:1;width:2.25rem;height:2.25rem;align-items:center;justify-content:center;border-radius:0.5rem;background:#FF6C2F;flex-shrink:0;">
+        <x-app-logo-icon class="size-5 fill-current text-white" />
+    </div>
+    <span style="font-size:1.1rem;font-weight:700;letter-spacing:-0.01em;color:inherit;">{{ config('app.name') }}</span>
+</a>
