@@ -1,8 +1,8 @@
-# Wiretier
+# WireTier
 
 A self-hosted ZeroTier controller UI built with Laravel and Livewire.
 
-Wiretier provides a team-based interface for sharing access to ZeroTier controller tokens, managing virtual networks, and controlling network membership — all from a clean, modern UI.
+WireTier provides a team-based interface for sharing access to ZeroTier controller tokens, managing virtual networks, and controlling network membership — all from a clean, modern UI.
 
 ## Screenshots
 
@@ -20,7 +20,7 @@ Wiretier provides a team-based interface for sharing access to ZeroTier controll
 
 [ZeroTier](https://www.zerotier.com/) is a software-defined networking tool that creates secure, peer-to-peer virtual networks. Devices running the ZeroTier client can join virtual networks and communicate directly with each other regardless of their physical location or network topology, as if they were on the same local network.
 
-A ZeroTier **controller** manages the membership and configuration of networks. Wiretier connects to one or more self-hosted ZeroTier controllers via their API, giving teams a shared interface to manage those networks.
+A ZeroTier **controller** manages the membership and configuration of networks. WireTier connects to one or more self-hosted ZeroTier controllers via their API, giving teams a shared interface to manage those networks.
 
 ## Features
 
@@ -71,7 +71,7 @@ A ZeroTier **controller** manages the membership and configuration of networks. 
 
 ---
 
-## Installing Wiretier
+## Installing WireTier
 
 ### Requirements
 
@@ -139,7 +139,7 @@ Key `.env` options:
 
 | Variable | Description |
 |---|---|
-| `APP_URL` | Public URL of your Wiretier instance |
+| `APP_URL` | Public URL of your WireTier instance |
 | `DB_CONNECTION` | Database driver (`mysql` or `sqlite`) |
 | `ADMIN_TEAM_UUID` | UUID of the team with system-wide admin privileges |
 | `MAIL_MAILER` | Mailer for invitations and notifications (e.g. `smtp`, `log`) |
@@ -154,13 +154,13 @@ Additional configuration (team roles, permissions, grace periods) is in `config/
 
 A ZeroTier controller is not a special piece of software — it is simply a regular ZeroTier node, the same client you would install on any machine to join a network. What makes it a controller is that the ZeroTier service exposes a local HTTP API on every node it runs on, which can be used to create and manage networks and authorize members.
 
-Wiretier connects to that local API using a token, giving your node its controller superpowers through a shared, team-based web interface. Any machine running ZeroTier can act as a controller; you just need to point Wiretier at it.
+WireTier connects to that local API using a token, giving your node its controller superpowers through a shared, team-based web interface. Any machine running ZeroTier can act as a controller; you just need to point WireTier at it.
 
 Visit the [ZeroTier download page](https://www.zerotier.com/download/) for official installation instructions for all platforms.
 
 ### Connecting Devices to a ZeroTier Network
 
-Once your controller is running and you have created a network in Wiretier, other devices can join that network by installing the ZeroTier client.
+Once your controller is running and you have created a network in WireTier, other devices can join that network by installing the ZeroTier client.
 
 #### macOS
 
@@ -168,7 +168,7 @@ Once your controller is running and you have created a network in Wiretier, othe
 2. Once installed, the ZeroTier icon will appear in the menu bar
 3. Click the icon and choose **Join Network...**
 4. Enter your network ID and click **Join**
-5. Approve the device in Wiretier (authorize the new member on the network)
+5. Approve the device in WireTier (authorize the new member on the network)
 
 You can also join from the terminal:
 
@@ -205,7 +205,7 @@ sudo systemctl enable zerotier-one
 sudo systemctl start zerotier-one
 ```
 
-After a device joins, it will appear in Wiretier's member list for that network. An Admin or Member with the appropriate permissions can then authorize it to allow full network access.
+After a device joins, it will appear in WireTier's member list for that network. An Admin or Member with the appropriate permissions can then authorize it to allow full network access.
 
 ---
 
