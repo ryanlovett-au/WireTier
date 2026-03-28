@@ -101,9 +101,17 @@ new #[Title('ZeroTier Networks')] class extends Component {
             foreach ($networkIds as $networkId) {
                 try {
                     $network = $service->getControllerNetwork($networkId);
-                    $members = $service->getNetworkMembers($networkId);
-                    $network['_member_count']        = collect($members)->where('authorized', true)->count();
-                    $network['_pending_count']        = collect($members)->where('authorized', false)->count();
+                    $memberIds = array_keys($service->getNetworkMembers($networkId));
+                    $authorized = 0;
+                    $pending    = 0;
+                    foreach ($memberIds as $nodeId) {
+                        try {
+                            $m = $service->getNetworkMember($networkId, $nodeId);
+                            ($m['authorized'] ?? false) ? $authorized++ : $pending++;
+                        } catch (\Exception) {}
+                    }
+                    $network['_member_count']  = $authorized;
+                    $network['_pending_count'] = $pending;
                     $this->networks[] = $network;
                 } catch (\Exception $e) {
                     // Skip networks that error
@@ -325,7 +333,7 @@ new #[Title('ZeroTier Networks')] class extends Component {
     }
 }; ?>
 
-<div class="mx-auto max-w-5xl p-6">
+<div class="mx-auto max-w-5xl p-6" wire:poll.60s="loadNetworks">
         <div class="flex items-center justify-between mb-6">
             <div>
                 <flux:heading size="xl">Networks</flux:heading>
@@ -340,8 +348,9 @@ new #[Title('ZeroTier Networks')] class extends Component {
                     </flux:select>
                 @endif
 
+                <flux:button size="sm" icon="arrow-path" wire:click="loadNetworks">Refresh</flux:button>
                 @if (auth()->user()->isTeamAdmin() && $tokens->count() > 0)
-                    <flux:button variant="primary" icon="plus" wire:click="openCreateModal">Create Network</flux:button>
+                    <flux:button icon="plus" variant="filled" wire:click="openCreateModal">Create Network</flux:button>
                 @endif
             </div>
         </div>
@@ -433,9 +442,11 @@ new #[Title('ZeroTier Networks')] class extends Component {
                     <flux:switch wire:model="edit_private" label="Private Network" description="Members must be authorised to join" />
                     <flux:switch wire:model="edit_broadcast" label="Enable Broadcast" description="Allow broadcast traffic on this network" />
                 </div>
-                <flux:input wire:model="edit_multicast_limit" type="number" min="0" max="1000"
-                    label="Multicast Recipient Limit"
-                    description="Maximum recipients for a multicast/broadcast packet (0 = disabled)" />
+                <div>
+                    <flux:label>Multicast Recipient Limit</flux:label>
+                    <flux:description class="mb-2">Maximum recipients for a multicast/broadcast packet (0 = disabled)</flux:description>
+                    <flux:input wire:model="edit_multicast_limit" type="number" min="0" max="1000" style="width:120px;" />
+                </div>
             </div>
 
             {{-- IP Ranges Panel --}}
