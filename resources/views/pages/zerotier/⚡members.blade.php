@@ -240,7 +240,7 @@ new #[Title('Network Members')] class extends Component {
                         <flux:table.column>Authorized</flux:table.column>
                         <flux:table.column>Bridge</flux:table.column>
                         <flux:table.column>Last Seen</flux:table.column>
-                        <flux:table.column>Version</flux:table.column>
+                        <flux:table.column>Version / IP / Latency</flux:table.column>
                         <flux:table.column>Actions</flux:table.column>
                     </flux:table.columns>
                     <flux:table.rows>
@@ -266,7 +266,7 @@ new #[Title('Network Members')] class extends Component {
                                     <span class="text-zinc-400">No</span>
                                 @endif
                             </flux:table.cell>
-                            <flux:table.cell class="text-xs">
+                            <flux:table.cell>
                                 @if ($member['_online'] ?? false)
                                     <span style="color:#16a34a;font-weight:600;">Online</span>
                                 @else
@@ -283,10 +283,11 @@ new #[Title('Network Members')] class extends Component {
                             <flux:table.cell class="text-xs text-zinc-500">
                                 <div>v{{ ($member['vMajor'] ?? '?') }}.{{ ($member['vMinor'] ?? '?') }}.{{ ($member['vRev'] ?? '?') }}</div>
                                 @if (! empty($member['_physicalAddr']))
-                                    <div class="font-mono">{{ $member['_physicalAddr'] }}</div>
+                                    @php $ip = explode('/', $member['_physicalAddr'])[0]; // strip port @endphp
+                                    <div class="font-mono">{{ $ip }}</div>
                                 @endif
                                 @php $latency = $member['_latency'] ?? -1; @endphp
-                                @if ($latency >= 0)
+                                @if ($latency > 0)
                                     <div>{{ $latency }} ms</div>
                                 @endif
                             </flux:table.cell>
