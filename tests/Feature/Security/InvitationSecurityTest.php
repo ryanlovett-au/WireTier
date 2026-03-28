@@ -77,8 +77,7 @@ test('non-admin cannot invite users to team', function () {
     session()->forget('current_team');
 
     // Try to invite via the team settings page
-    $component = Livewire::withQueryParams(['id' => SecurityTestSeeder::ALPHA_TEAM_ID])
-        ->test('pages::settings.team')
+    $component = Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ALPHA_TEAM_ID])
         ->set('invite_team_email', 'hacker@test.local')
         ->set('invite_team_role', 'admin')
         ->call('inviteTeam');
@@ -101,7 +100,7 @@ test('invitation does not leak team details to non-members', function () {
     session()->forget('current_team');
 
     // Beta member trying to access Alpha team settings
-    $response = $this->get(route('teams.show').'?id='.SecurityTestSeeder::ALPHA_TEAM_ID);
+    $response = $this->get(route('teams.show', SecurityTestSeeder::ALPHA_TEAM_ID));
 
     $response->assertStatus(403);
 });

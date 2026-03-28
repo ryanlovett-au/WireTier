@@ -35,9 +35,9 @@ new #[Title('Team Settings')] class extends Component {
 
     public array $permissions = [];
 
-    public function mount()
+    public function mount(?string $id = null)
     {
-        $teamId = request()->query('id', auth()->user()->current_team);
+        $teamId = $id ?? auth()->user()->current_team;
 
         if (! $teamId) {
             abort(404);

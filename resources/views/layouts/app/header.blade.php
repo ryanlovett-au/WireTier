@@ -23,7 +23,7 @@
             <flux:navbar class="me-1.5 space-x-0.5 rtl:space-x-reverse py-0!">
                 @if (auth()->user()->team)
                 <flux:tooltip :content="auth()->user()->team->name" position="bottom">
-                    <flux:navbar.item class="!h-10 [&>div>svg]:size-5" icon="users" :href="route('teams.show', ['id' => auth()->user()->current_team])" wire:navigate :label="auth()->user()->team->name" />
+                    <flux:navbar.item class="!h-10 [&>div>svg]:size-5" icon="users" :href="route('teams.show', auth()->user()->current_team)" wire:navigate :label="auth()->user()->team->name" />
                 </flux:tooltip>
                 @endif
             </flux:navbar>

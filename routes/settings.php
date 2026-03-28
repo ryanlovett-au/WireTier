@@ -25,7 +25,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Team routes
     Route::livewire('settings/teams', 'pages::settings.teams')->name('teams.index');
-    Route::livewire('settings/team', 'pages::settings.team')->name('teams.show');
+    Route::livewire('settings/team/{id?}', 'pages::settings.team')->name('teams.show');
 
     // Team switcher
     Route::post('teams/{id}/switch', function (string $id) {

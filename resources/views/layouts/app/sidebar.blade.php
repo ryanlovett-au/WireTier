@@ -82,7 +82,7 @@
                             @endforeach
                         </flux:menu.radio.group>
                         <flux:menu.separator />
-                        <flux:menu.item icon="cog" :href="route('teams.show', ['id' => auth()->user()->current_team])" wire:navigate>
+                        <flux:menu.item icon="cog" :href="route('teams.show', auth()->user()->current_team)" wire:navigate>
                             Team Settings
                         </flux:menu.item>
                         <flux:menu.item icon="plus" :href="route('teams.index')" wire:navigate>

@@ -81,7 +81,7 @@
                         Manage Controllers
                     </flux:button>
                     @endif
-                    <flux:button variant="ghost" icon="users" :href="route('teams.show', ['id' => auth()->user()->current_team])" wire:navigate class="w-full justify-start">
+                    <flux:button variant="ghost" icon="users" :href="route('teams.show', auth()->user()->current_team)" wire:navigate class="w-full justify-start">
                         Team Settings
                     </flux:button>
                 </div>

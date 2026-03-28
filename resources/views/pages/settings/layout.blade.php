@@ -10,7 +10,7 @@
             <flux:navlist.group heading="Teams">
                 <flux:navlist.item :href="route('teams.index')" wire:navigate>{{ __('My Teams') }}</flux:navlist.item>
                 @if (auth()->user()->team)
-                    <flux:navlist.item :href="route('teams.show', ['id' => auth()->user()->current_team])" wire:navigate>
+                    <flux:navlist.item :href="route('teams.show', auth()->user()->current_team)" wire:navigate>
                         {{ auth()->user()->team->name }}
                     </flux:navlist.item>
                 @endif
