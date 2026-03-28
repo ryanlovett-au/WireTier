@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ config('app.name', 'Laratier') }}</title>
+    <title>{{ config('app.name', 'Wiretier') }}</title>
     <link rel="icon" href="/favicon.ico" sizes="any">
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -27,7 +27,7 @@
                 <span class="flex items-center justify-center rounded-lg bg-orange-500 text-white flex-shrink-0" style="width:32px;height:32px;">
                     <x-app-logo-icon style="width:20px;height:20px;" />
                 </span>
-                <span class="font-semibold text-zinc-100">Laratier</span>
+                <span class="font-semibold text-zinc-100">Wiretier</span>
             </a>
             <nav class="flex items-center gap-3">
                 @auth
@@ -85,7 +85,8 @@
                 </h1>
 
                 <p class="text-zinc-400 mx-auto" style="font-size:1.125rem;line-height:1.7;max-width:560px;margin-bottom:40px;">
-                    Run it on your own infrastructure. Laratier gives your self-hosted ZeroTier controller
+                    A self-hosted ZeroTier controller UI built with Laravel and Livewire.<br><br>
+                    Run it on your own infrastructure. Wiretier gives your self-hosted ZeroTier controller
                     a powerful web UI — manage networks, authorize members, and share access with your team.
                 </p>
 
@@ -120,14 +121,14 @@
                     <h2 class="font-semibold text-zinc-100" style="font-size:1.5rem;margin-bottom:12px;">How it works</h2>
                     <p class="text-zinc-400 mx-auto" style="max-width:560px;line-height:1.7;">
                         A ZeroTier controller is just a regular ZeroTier node. Every node exposes a local API —
-                        Laratier connects to that API and gives it controller superpowers through a shared web UI.
+                        Wiretier connects to that API and gives it controller superpowers through a shared web UI.
                     </p>
                 </div>
 
                 <div class="lp-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
                     @foreach ([
                         ['1', 'Install ZeroTier', 'Install the ZeroTier client on any machine. It becomes a node — and every node is already a controller waiting to be unlocked.'],
-                        ['2', 'Add your token', 'Paste your ZeroTier API token into Laratier. It will automatically detect your node address and verify the connection.'],
+                        ['2', 'Add your token', 'Paste your ZeroTier API token into Wiretier. It will automatically detect your node address and verify the connection.'],
                         ['3', 'Manage your networks', 'Browse networks, authorize members, and share access with your team — with roles and permissions built in from the start.'],
                     ] as [$num, $title, $body])
                     <div class="rounded-2xl border border-zinc-800 bg-zinc-900" style="padding:24px;">
@@ -147,7 +148,7 @@
                 <div class="text-center" style="margin-bottom:56px;">
                     <h2 class="font-semibold text-zinc-100" style="font-size:1.5rem;margin-bottom:12px;">Everything your team needs</h2>
                     <p class="text-zinc-400 mx-auto" style="max-width:560px;line-height:1.7;">
-                        From inviting teammates to authorizing devices, Laratier covers the full ZeroTier management workflow.
+                        From inviting teammates to authorizing devices, Wiretier covers the full ZeroTier management workflow.
                     </p>
                 </div>
 
@@ -210,7 +211,7 @@
                 </div>
                 <h2 class="font-semibold text-zinc-100" style="font-size:1.875rem;margin-bottom:16px;">Ready to take control?</h2>
                 <p class="text-zinc-400" style="line-height:1.7;margin-bottom:32px;">
-                    Set up Laratier on your own infrastructure and start managing your ZeroTier networks in minutes.
+                    Set up Wiretier on your own infrastructure and start managing your ZeroTier networks in minutes.
                 </p>
                 <div class="flex flex-wrap items-center justify-center gap-3">
                     @auth
@@ -225,7 +226,7 @@
                            style="padding:12px 28px;box-shadow:0 4px 16px rgba(249,115,22,0.25);">
                             Create an account
                         </a>
-                        <a href="https://github.com/ryanlovett/laratier" target="_blank"
+                        <a href="https://github.com/ryanlovett/wiretier" target="_blank"
                            class="inline-flex items-center font-medium text-zinc-100 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 transition-colors no-underline"
                            style="padding:12px 28px;">
                             View on GitHub
@@ -244,11 +245,11 @@
                 <span class="flex items-center justify-center rounded bg-orange-500 text-white" style="width:20px;height:20px;">
                     <x-app-logo-icon style="width:12px;height:12px;" />
                 </span>
-                <span>Laratier</span>
+                <span>Wiretier</span>
             </div>
             <div class="flex items-center gap-5 text-zinc-500" style="font-size:14px;">
                 <a href="https://www.zerotier.com/" target="_blank" class="hover:text-zinc-300 transition-colors no-underline">ZeroTier</a>
-                <a href="https://github.com/ryanlovett/laratier" target="_blank" class="hover:text-zinc-300 transition-colors no-underline">GitHub</a>
+                <a href="https://github.com/ryanlovett/wiretier" target="_blank" class="hover:text-zinc-300 transition-colors no-underline">GitHub</a>
                 <span>GPL-3.0</span>
             </div>
         </div>
