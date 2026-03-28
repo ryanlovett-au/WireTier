@@ -1,0 +1,202 @@
+# Laratier
+
+A self-hosted ZeroTier controller UI built with Laravel and Livewire.
+
+Laratier provides a team-based interface for sharing access to ZeroTier controller tokens, managing virtual networks, and controlling network membership — all from a clean, modern UI.
+
+## What is ZeroTier?
+
+[ZeroTier](https://www.zerotier.com/) is a software-defined networking tool that creates secure, peer-to-peer virtual networks. Devices running the ZeroTier client can join virtual networks and communicate directly with each other regardless of their physical location or network topology, as if they were on the same local network.
+
+A ZeroTier **controller** manages the membership and configuration of networks. Laratier connects to one or more self-hosted ZeroTier controllers via their API, giving teams a shared interface to manage those networks.
+
+## Features
+
+### Team Management
+- Create and manage multiple teams, each with isolated ZeroTier resources
+- Invite users to teams by email
+- Role-based access control with three roles:
+  - **Admin** — full control over team settings, tokens, networks, and members
+  - **Member** — can manage networks and members within the team
+  - **Viewer** — read-only access to networks and peers
+- Fine-grained permissions: `manage_networks`, `create_networks`, `delete_networks`, `manage_members`, `manage_tokens`, `view_peers`
+- Team switching from the sidebar
+- Grace period handling when the last team member would be removed
+
+### ZeroTier Controller Tokens
+- Add ZeroTier controller API tokens to a team
+- Automatically detect the controller's node address on save
+- Test connectivity to the controller from the UI
+- Edit or remove tokens; all associated networks are tracked per token
+
+### Network Management
+- Browse all networks visible to a controller token
+- View network configuration and metadata
+- Navigate into a network to manage its members
+
+### Member Management
+- List all members on a network with live status: IP addresses, latency, client version, last seen
+- Authorize and deauthorize members directly from the UI
+- Auto-refreshes every 60 seconds to keep member status current
+
+### Peer Topology
+- View peer connections for each controller node
+- Inspect connectivity between nodes in the network
+
+### Authentication & Security
+- Email/password authentication with email verification
+- Two-factor authentication (TOTP) via Laravel Fortify
+- Password reset via email
+- Session management and account deletion
+
+## Tech Stack
+
+- **Backend:** Laravel 13, PHP 8.3+
+- **Authentication:** Laravel Fortify
+- **Frontend:** Livewire 4, Flux UI components, Tailwind CSS 4, Vite
+- **Database:** MySQL (SQLite supported for local development)
+- **Queue / Cache / Sessions:** Redis-backed
+
+---
+
+## Installing Laratier
+
+### Requirements
+
+- PHP 8.3+
+- Composer
+- Node.js 20+ and npm
+- MySQL 8+ (or SQLite for local development)
+- Redis 6+
+- A running ZeroTier controller with API access
+
+### Steps
+
+```bash
+# Clone the repository
+git clone <repo-url>
+cd laratier
+
+# Install PHP dependencies
+composer install
+
+# Install frontend dependencies
+npm install
+
+# Copy and configure the environment file
+cp .env.example .env
+php artisan key:generate
+```
+
+Edit `.env` and set your database connection:
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=laratier
+DB_USERNAME=your_db_user
+DB_PASSWORD=your_db_password
+```
+
+Then run the migrations and build the frontend:
+
+```bash
+php artisan migrate
+npm run build
+php artisan serve
+```
+
+The application will be available at `http://localhost:8000`.
+
+### Development Mode
+
+For local development with hot module replacement:
+
+```bash
+# In one terminal
+php artisan serve
+
+# In another terminal
+npm run dev
+```
+
+### Configuration
+
+Key `.env` options:
+
+| Variable | Description |
+|---|---|
+| `APP_URL` | Public URL of your Laratier instance |
+| `DB_CONNECTION` | Database driver (`mysql` or `sqlite`) |
+| `ADMIN_TEAM_UUID` | UUID of the team with system-wide admin privileges |
+| `MAIL_MAILER` | Mailer for invitations and notifications (e.g. `smtp`, `log`) |
+
+Additional configuration (team roles, permissions, grace periods) is in `config/laratier.php`.
+
+---
+
+## Setting Up ZeroTier
+
+### What is a ZeroTier Controller?
+
+A ZeroTier controller is not a special piece of software — it is simply a regular ZeroTier node, the same client you would install on any machine to join a network. What makes it a controller is that the ZeroTier service exposes a local HTTP API on every node it runs on, which can be used to create and manage networks and authorize members.
+
+Laratier connects to that local API using a token, giving your node its controller superpowers through a shared, team-based web interface. Any machine running ZeroTier can act as a controller; you just need to point Laratier at it.
+
+Visit the [ZeroTier download page](https://www.zerotier.com/download/) for official installation instructions for all platforms.
+
+### Connecting Devices to a ZeroTier Network
+
+Once your controller is running and you have created a network in Laratier, other devices can join that network by installing the ZeroTier client.
+
+#### macOS
+
+1. Download and install the ZeroTier client from [zerotier.com/download](https://www.zerotier.com/download/)
+2. Once installed, the ZeroTier icon will appear in the menu bar
+3. Click the icon and choose **Join Network...**
+4. Enter your network ID and click **Join**
+5. Approve the device in Laratier (authorize the new member on the network)
+
+You can also join from the terminal:
+
+```bash
+sudo zerotier-cli join <network-id>
+```
+
+Check status:
+
+```bash
+zerotier-cli status
+zerotier-cli listnetworks
+```
+
+#### Linux
+
+Install the ZeroTier client using the instructions at [zerotier.com/download](https://www.zerotier.com/download/), then join a network:
+
+```bash
+sudo zerotier-cli join <network-id>
+```
+
+Check status and list joined networks:
+
+```bash
+sudo zerotier-cli status
+sudo zerotier-cli listnetworks
+```
+
+The ZeroTier service can be managed with systemd:
+
+```bash
+sudo systemctl enable zerotier-one
+sudo systemctl start zerotier-one
+```
+
+After a device joins, it will appear in Laratier's member list for that network. An Admin or Member with the appropriate permissions can then authorize it to allow full network access.
+
+---
+
+## License
+
+[GNU General Public License v3.0](LICENSE)
