@@ -13,14 +13,11 @@ new #[Title('Node Status & Peers')] class extends Component {
 
     public function mount()
     {
-        if (! auth()->user()->team) {
-            $this->redirect('/settings/teams');
-            return;
+        if (! auth()->user()->isAdmin()) {
+            abort(403);
         }
 
-        $this->tokens = ZerotierToken::where('team_id', auth()->user()->team->id)
-            ->where('is_active', true)
-            ->get();
+        $this->tokens = ZerotierToken::where('is_active', true)->get();
 
         if ($this->tokens->count() > 0) {
             $this->selectedToken = $this->tokens->first()->id;
@@ -39,7 +36,10 @@ new #[Title('Node Status & Peers')] class extends Component {
 
         try {
             $this->status = $service->getStatus();
-            $this->peers = $service->getPeers();
+            $roleOrder = ['PLANET' => 0, 'MOON' => 1, 'LEAF' => 2];
+            $peers = $service->getPeers();
+            usort($peers, fn ($a, $b) => ($roleOrder[$a['role'] ?? 'LEAF'] ?? 2) <=> ($roleOrder[$b['role'] ?? 'LEAF'] ?? 2));
+            $this->peers = $peers;
         } catch (\Exception $e) {
             Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load peers: '.$e->getMessage());
         }
@@ -51,8 +51,7 @@ new #[Title('Node Status & Peers')] class extends Component {
     }
 }; ?>
 
-<x-layouts::app :title="__('ZeroTier Peers')">
-    <div class="mx-auto max-w-5xl p-6">
+<div class="mx-auto max-w-5xl p-6">
         <div class="flex items-center justify-between mb-6">
             <div>
                 <flux:heading size="xl">Node Status & Peers</flux:heading>
@@ -149,5 +148,4 @@ new #[Title('Node Status & Peers')] class extends Component {
                 @endif
             </flux:card>
         @endif
-    </div>
-</x-layouts::app>
+</div>

@@ -21,12 +21,14 @@
                     <flux:sidebar.item icon="globe-alt" :href="route('zerotier.networks')" :current="request()->routeIs('zerotier.networks') || request()->routeIs('zerotier.members')" wire:navigate>
                         {{ __('Networks') }}
                     </flux:sidebar.item>
+                    @if (auth()->user()->isAdmin())
                     <flux:sidebar.item icon="signal" :href="route('zerotier.peers')" :current="request()->routeIs('zerotier.peers')" wire:navigate>
                         {{ __('Peers') }}
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="key" :href="route('zerotier.tokens')" :current="request()->routeIs('zerotier.tokens')" wire:navigate>
                         {{ __('Connections') }}
                     </flux:sidebar.item>
+                    @endif
                 </flux:sidebar.group>
             </flux:sidebar.nav>
 

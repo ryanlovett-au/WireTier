@@ -41,8 +41,14 @@ class User extends Authenticatable
 
     public function getTeamAttribute(): ?Team
     {
-        if ($team = session('current_team', false)) {
+        $team = session('current_team', false);
+        if ($team instanceof Team) {
             return $team;
+        }
+
+        // Clear invalid session data
+        if ($team !== false) {
+            session()->forget('current_team');
         }
 
         if (! is_null($this->current_team) && $team = Team::find($this->current_team)) {

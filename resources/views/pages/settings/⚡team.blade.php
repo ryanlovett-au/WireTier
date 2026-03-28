@@ -266,10 +266,10 @@ new #[Title('Team Settings')] class extends Component {
     }
 }; ?>
 
-<x-settings-layout>
-    <x-slot:heading>{{ $current_team->name }}</x-slot:heading>
-    <x-slot:subheading>Manage team members, invitations, and settings.</x-slot:subheading>
+<section class="w-full">
+    @include('partials.settings-heading')
 
+    <x-pages::settings.layout :heading="$current_team->name" :subheading="__('Manage team members, invitations, and settings.')">
     <div class="max-w-2xl">
         {{-- Current Team Info --}}
         <flux:card class="mb-6">
@@ -499,4 +499,5 @@ new #[Title('Team Settings')] class extends Component {
             <flux:button variant="danger" wire:click="leaveTeam">Leave</flux:button>
         </div>
     </flux:modal>
-</x-settings-layout>
+    </x-pages::settings.layout>
+</section>

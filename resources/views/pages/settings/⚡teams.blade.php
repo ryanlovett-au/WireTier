@@ -49,9 +49,7 @@ new #[Title('Teams')] class extends Component {
 
     public function createTeam(): void
     {
-        if (! auth()->user()->isAdmin()) {
-            return;
-        }
+        // Any authenticated user can create a team
 
         $this->validate([
             'new_team_name' => 'required|string|max:255',
@@ -80,93 +78,92 @@ new #[Title('Teams')] class extends Component {
     }
 }; ?>
 
-<x-settings-layout>
-    <x-slot:heading>Teams</x-slot:heading>
-    <x-slot:subheading>Manage your teams and switch between them.</x-slot:subheading>
+<section class="w-full">
+    @include('partials.settings-heading')
 
-    <div class="max-w-2xl">
-        {{-- Team List --}}
-        <flux:card class="mb-6">
-            <flux:heading class="mb-4">Your Teams</flux:heading>
+    <x-pages::settings.layout :heading="__('Teams')" :subheading="__('Manage your teams and switch between them.')">
+        <div class="max-w-2xl">
+            {{-- Team List --}}
+            <flux:card class="mb-6">
+                <flux:heading class="mb-4">Your Teams</flux:heading>
 
-            @if ($teams->count() > 0)
-            <flux:table>
-                <flux:table.columns>
-                    <flux:table.column></flux:table.column>
-                    <flux:table.column>Name</flux:table.column>
-                    <flux:table.column>Members</flux:table.column>
-                    <flux:table.column>Actions</flux:table.column>
-                </flux:table.columns>
-                <flux:table.rows>
-                @foreach ($teams as $team)
-                    <flux:table.row :key="$team->id">
-                        <flux:table.cell>
-                            <div class="relative w-10 h-10 rounded-full bg-{{ $team->colour }}-400/20 text-{{ $team->colour }}-600 flex items-center justify-center">
-                                <flux:icon variant="solid" name="{{ $team->icon }}" class="size-4" />
-                            </div>
-                        </flux:table.cell>
-                        <flux:table.cell class="font-medium">
-                            {{ $team->name }}
-                            @if (auth()->user()->current_team == $team->id)
-                                <flux:badge color="green" size="sm" class="ml-2">Current</flux:badge>
-                            @endif
-                        </flux:table.cell>
-                        <flux:table.cell>{{ $team->countUsers() }}</flux:table.cell>
-                        <flux:table.cell>
-                            <div class="flex gap-1">
-                                @if (auth()->user()->current_team != $team->id)
-                                    <flux:button size="xs" icon="arrows-right-left" tooltip="Switch to this team" wire:click="switchTeam('{{ $team->id }}')" />
+                @if ($teams->count() > 0)
+                <flux:table>
+                    <flux:table.columns>
+                        <flux:table.column></flux:table.column>
+                        <flux:table.column>Name</flux:table.column>
+                        <flux:table.column>Members</flux:table.column>
+                        <flux:table.column>Actions</flux:table.column>
+                    </flux:table.columns>
+                    <flux:table.rows>
+                    @foreach ($teams as $team)
+                        <flux:table.row :key="$team->id">
+                            <flux:table.cell>
+                                <div class="relative w-10 h-10 rounded-full bg-{{ $team->colour }}-400/20 text-{{ $team->colour }}-600 flex items-center justify-center">
+                                    <flux:icon variant="solid" name="{{ $team->icon }}" class="size-4" />
+                                </div>
+                            </flux:table.cell>
+                            <flux:table.cell class="font-medium">
+                                {{ $team->name }}
+                                @if (auth()->user()->current_team == $team->id)
+                                    <flux:badge color="green" size="sm" class="ml-2">Current</flux:badge>
                                 @endif
-                                <flux:button size="xs" icon="cog-6-tooth" tooltip="Manage" wire:click="selectTeam('{{ $team->id }}')" />
-                            </div>
-                        </flux:table.cell>
-                    </flux:table.row>
-                @endforeach
-                </flux:table.rows>
-            </flux:table>
-            @else
-                <flux:subheading>You are not a member of any teams yet.</flux:subheading>
-            @endif
-        </flux:card>
-
-        {{-- Create Team (Admin Only) --}}
-        @if (auth()->user()->isAdmin())
-        <flux:card>
-            <flux:heading class="mb-4">Create Team</flux:heading>
-
-            <flux:input wire:model="new_team_name" label="Team Name" class="mb-4" />
-
-            <div class="mb-4">
-                <flux:label>Colour</flux:label>
-                <div class="flex flex-wrap gap-2 mt-2">
-                    @foreach ($colours as $colour)
-                        <button
-                            wire:click="$set('new_team_colour', '{{ $colour }}')"
-                            class="w-8 h-8 rounded-full bg-{{ $colour }}-500 ring-2 {{ $new_team_colour === $colour ? 'ring-offset-2 ring-'.$colour.'-500' : 'ring-transparent' }}"
-                        ></button>
+                            </flux:table.cell>
+                            <flux:table.cell>{{ $team->countUsers() }}</flux:table.cell>
+                            <flux:table.cell>
+                                <div class="flex gap-1">
+                                    @if (auth()->user()->current_team != $team->id)
+                                        <flux:button size="xs" icon="arrows-right-left" tooltip="Switch to this team" wire:click="switchTeam('{{ $team->id }}')" />
+                                    @endif
+                                    <flux:button size="xs" icon="cog-6-tooth" tooltip="Manage" wire:click="selectTeam('{{ $team->id }}')" />
+                                </div>
+                            </flux:table.cell>
+                        </flux:table.row>
                     @endforeach
-                </div>
-            </div>
+                    </flux:table.rows>
+                </flux:table>
+                @else
+                    <flux:subheading>You are not a member of any teams yet.</flux:subheading>
+                @endif
+            </flux:card>
 
-            <div class="mb-4">
-                <flux:label>Icon</flux:label>
-                <div class="flex flex-wrap gap-2 mt-2">
-                    @foreach ($icons as $icon)
-                        <button
-                            wire:click="$set('new_team_icon', '{{ $icon }}')"
-                            class="w-10 h-10 rounded-lg flex items-center justify-center {{ $new_team_icon === $icon ? 'bg-zinc-200 dark:bg-zinc-700' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800' }}"
-                        >
-                            <flux:icon name="{{ $icon }}" class="size-5" />
-                        </button>
-                    @endforeach
-                </div>
-            </div>
+            {{-- Create Team --}}
+            <flux:card>
+                <flux:heading class="mb-4">Create Team</flux:heading>
 
-            <div class="flex">
-                <flux:spacer />
-                <flux:button variant="primary" wire:click="createTeam()">Create Team</flux:button>
-            </div>
-        </flux:card>
-        @endif
-    </div>
-</x-settings-layout>
+                <flux:input wire:model="new_team_name" label="Team Name" class="mb-4" />
+
+                <div class="mb-4">
+                    <flux:label>Colour</flux:label>
+                    <div class="flex flex-wrap gap-2 mt-2">
+                        @foreach ($colours as $colour)
+                            <button
+                                wire:click="$set('new_team_colour', '{{ $colour }}')"
+                                class="w-8 h-8 rounded-full bg-{{ $colour }}-500 ring-2 {{ $new_team_colour === $colour ? 'ring-offset-2 ring-'.$colour.'-500' : 'ring-transparent' }}"
+                            ></button>
+                        @endforeach
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <flux:label>Icon</flux:label>
+                    <div class="flex flex-wrap gap-2 mt-2">
+                        @foreach ($icons as $icon)
+                            <button
+                                wire:click="$set('new_team_icon', '{{ $icon }}')"
+                                class="w-10 h-10 rounded-lg flex items-center justify-center {{ $new_team_icon === $icon ? 'bg-zinc-200 dark:bg-zinc-700' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800' }}"
+                            >
+                                <flux:icon name="{{ $icon }}" class="size-5" />
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+
+                <div class="flex">
+                    <flux:spacer />
+                    <flux:button variant="primary" wire:click="createTeam()">Create Team</flux:button>
+                </div>
+            </flux:card>
+        </div>
+    </x-pages::settings.layout>
+</section>

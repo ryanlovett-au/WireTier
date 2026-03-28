@@ -142,8 +142,7 @@ new #[Title('Network Members')] class extends Component {
     }
 }; ?>
 
-<x-layouts::app :title="__('Network Members')">
-    <div class="mx-auto max-w-5xl p-6">
+<div class="mx-auto max-w-5xl p-6">
         <div class="flex items-center justify-between mb-6">
             <div>
                 <div class="flex items-center gap-2 mb-1">
@@ -253,5 +252,4 @@ new #[Title('Network Members')] class extends Component {
                 <flux:button variant="primary" wire:click="saveMember()">Save</flux:button>
             </div>
         </flux:modal>
-    </div>
-</x-layouts::app>
+</div>

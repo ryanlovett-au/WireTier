@@ -21,9 +21,8 @@ new #[Title('ZeroTier Connections')] class extends Component {
 
     public function mount()
     {
-        if (! auth()->user()->team) {
-            $this->redirect('/settings/teams');
-            return;
+        if (! auth()->user()->isAdmin()) {
+            abort(403);
         }
 
         $this->loadTokens();
@@ -31,12 +30,12 @@ new #[Title('ZeroTier Connections')] class extends Component {
 
     public function loadTokens()
     {
-        $this->tokens = ZerotierToken::where('team_id', auth()->user()->team->id)->get();
+        $this->tokens = ZerotierToken::all();
     }
 
     public function addToken(): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! auth()->user()->isAdmin()) {
             return;
         }
 
@@ -140,8 +139,7 @@ new #[Title('ZeroTier Connections')] class extends Component {
     }
 }; ?>
 
-<x-layouts::app :title="__('ZeroTier Tokens')">
-    <div class="mx-auto max-w-4xl p-6">
+<div class="mx-auto max-w-4xl p-6">
         <div class="mb-6">
             <flux:heading size="xl">ZeroTier Connections</flux:heading>
             <flux:subheading>Connect to your self-hosted ZeroTier instances by adding their API tokens.</flux:subheading>
@@ -187,7 +185,7 @@ new #[Title('ZeroTier Connections')] class extends Component {
         @endif
 
         {{-- Add New Token --}}
-        @if (auth()->user()->isTeamAdmin())
+        @if (auth()->user()->isAdmin())
         <flux:card>
             <flux:heading class="mb-4">Add ZeroTier Connection</flux:heading>
             <flux:subheading class="mb-4">
@@ -229,5 +227,4 @@ new #[Title('ZeroTier Connections')] class extends Component {
                 <flux:button variant="danger" wire:click="deleteToken">Delete</flux:button>
             </div>
         </flux:modal>
-    </div>
-</x-layouts::app>
+</div>

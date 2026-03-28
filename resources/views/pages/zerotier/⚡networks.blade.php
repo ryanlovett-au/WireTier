@@ -140,8 +140,7 @@ new #[Title('ZeroTier Networks')] class extends Component {
     }
 }; ?>
 
-<x-layouts::app :title="__('ZeroTier Networks')">
-    <div class="mx-auto max-w-5xl p-6">
+<div class="mx-auto max-w-5xl p-6">
         <div class="flex items-center justify-between mb-6">
             <div>
                 <flux:heading size="xl">Networks</flux:heading>
@@ -233,5 +232,4 @@ new #[Title('ZeroTier Networks')] class extends Component {
                 <flux:button variant="primary" wire:click="createNetwork()">Create</flux:button>
             </div>
         </flux:modal>
-    </div>
-</x-layouts::app>
+</div>
