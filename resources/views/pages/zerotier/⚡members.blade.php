@@ -58,6 +58,9 @@ new #[Title('Network Members')] class extends Component {
             $memberIds = $service->getNetworkMembers($this->networkId);
             $this->members = [];
 
+            // The controller node address is the first 10 chars of the network ID
+            $controllerAddress = substr($this->networkId, 0, 10);
+
             // Index peers by address for cross-referencing online status
             try {
                 $peers = collect($service->getPeers())->keyBy('address');
@@ -69,8 +72,13 @@ new #[Title('Network Members')] class extends Component {
                 try {
                     $member = $service->getNetworkMember($this->networkId, $nodeId);
 
+                    // The local controller node is always online (it never appears in the peer list)
+                    if ($nodeId === $controllerAddress) {
+                        $member['_online']       = true;
+                        $member['_latency']      = 0;
+                        $member['_physicalAddr'] = null;
                     // Enrich with live peer data if available
-                    if ($peer = $peers->get($nodeId)) {
+                    } elseif ($peer = $peers->get($nodeId)) {
                         $activePaths = collect($peer['paths'] ?? [])->where('active', true);
                         $member['_online']       = $activePaths->isNotEmpty();
                         $member['_latency']      = $peer['latency'] ?? -1;
