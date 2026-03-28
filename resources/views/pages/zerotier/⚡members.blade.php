@@ -190,6 +190,7 @@ new #[Title('Network Members')] class extends Component {
                         <flux:table.column>IP Assignments</flux:table.column>
                         <flux:table.column>Authorized</flux:table.column>
                         <flux:table.column>Bridge</flux:table.column>
+                        <flux:table.column>Last Seen</flux:table.column>
                         <flux:table.column>Version</flux:table.column>
                         <flux:table.column>Actions</flux:table.column>
                     </flux:table.columns>
@@ -217,7 +218,26 @@ new #[Title('Network Members')] class extends Component {
                                 @endif
                             </flux:table.cell>
                             <flux:table.cell class="text-xs">
-                                {{ ($member['vMajor'] ?? '') }}.{{ ($member['vMinor'] ?? '') }}.{{ ($member['vRev'] ?? '') }}
+                                @php
+                                    $lastOnlineSec = ($member['lastOnline'] ?? 0) / 1000;
+                                    $isOnline = $lastOnlineSec > 0 && (time() - $lastOnlineSec) < 300;
+                                @endphp
+                                @if ($isOnline)
+                                    <span style="color:#16a34a;font-weight:600;">Online</span>
+                                @elseif ($lastOnlineSec > 0)
+                                    <span class="text-zinc-400">{{ \Carbon\Carbon::createFromTimestamp($lastOnlineSec)->diffForHumans() }}</span>
+                                @else
+                                    <span class="text-zinc-400">Never</span>
+                                @endif
+                            </flux:table.cell>
+                            <flux:table.cell class="text-xs text-zinc-500">
+                                <div>v{{ ($member['vMajor'] ?? '?') }}.{{ ($member['vMinor'] ?? '?') }}.{{ ($member['vRev'] ?? '?') }}</div>
+                                @if (! empty($member['physicalAddr']))
+                                    <div class="font-mono">{{ $member['physicalAddr'] }}</div>
+                                @endif
+                                @if (isset($member['latency']) && $member['latency'] >= 0)
+                                    <div>({{ $member['latency'] }} ms)</div>
+                                @endif
                             </flux:table.cell>
                             <flux:table.cell>
                                 <div class="flex gap-1">
