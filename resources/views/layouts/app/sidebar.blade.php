@@ -28,6 +28,7 @@
                     <flux:sidebar.item icon="key" :href="route('zerotier.tokens')" :current="request()->routeIs('zerotier.tokens')" wire:navigate>
                         {{ __('Connections') }}
                     </flux:sidebar.item>
+                    <x-zerotier-status />
                     @endif
                 </flux:sidebar.group>
             </flux:sidebar.nav>

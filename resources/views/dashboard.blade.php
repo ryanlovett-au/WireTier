@@ -31,24 +31,8 @@
                 </div>
             </flux:card>
 
-            {{-- Connections Count (admin only) --}}
-            @if (auth()->user()->isAdmin())
-            <flux:card>
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-green-400/20 text-green-600 flex items-center justify-center">
-                        <flux:icon name="signal" class="size-5" />
-                    </div>
-                    <div>
-                        <flux:heading size="lg">
-                            {{ \App\Models\ZerotierToken::where('is_active', true)->count() }}
-                        </flux:heading>
-                        <flux:subheading>Active Connections</flux:subheading>
-                    </div>
-                </div>
-            </flux:card>
-            @endif
 
-            {{-- Team Members Count --}}
+{{-- Team Members Count --}}
             <flux:card>
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-full bg-purple-400/20 text-purple-600 flex items-center justify-center">
