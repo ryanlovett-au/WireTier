@@ -11,6 +11,9 @@ new #[Title('Network Members')] class extends Component {
     public array $network = [];
     public array $members = [];
 
+    // Delete confirmation
+    public string $delete_member_id = '';
+
     // Edit member
     public string $edit_member_id = '';
     public string $edit_member_name = '';
@@ -90,11 +93,19 @@ new #[Title('Network Members')] class extends Component {
         }
     }
 
-    public function deleteMember($nodeId): void
+    public function confirmDeleteMember(string $nodeId): void
+    {
+        $this->delete_member_id = $nodeId;
+        Flux::modal('deleteMemberModal')->show();
+    }
+
+    public function deleteMember(): void
     {
         try {
-            $this->getService()->deleteMember($this->networkId, $nodeId);
+            $this->getService()->deleteMember($this->networkId, $this->delete_member_id);
+            Flux::modal('deleteMemberModal')->close();
             Flux::toast(variant: 'success', heading: 'Deleted', text: 'Member has been removed.');
+            $this->delete_member_id = '';
             $this->loadMembers();
         } catch (\Exception $e) {
             Flux::toast(variant: 'danger', heading: 'Error', text: $e->getMessage());
@@ -244,10 +255,10 @@ new #[Title('Network Members')] class extends Component {
                                     @if (! ($member['authorized'] ?? false))
                                         <flux:button size="xs" icon="check" style="background:#16a34a;color:#fff;border-color:#16a34a;" tooltip="Authorize" wire:click="authorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
                                     @else
-                                        <flux:button size="xs" icon="x-mark" tooltip="Deauthorize" wire:click="deauthorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
+                                        <flux:button size="xs" icon="x-mark" variant="outline" style="color:#dc2626;border-color:#dc2626;" tooltip="Deauthorize" wire:click="deauthorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
                                     @endif
-                                    <flux:button size="xs" icon="pencil" tooltip="Edit IPs" wire:click="editMemberModal('{{ $member['address'] ?? $member['id'] }}')" />
-                                    <flux:button size="xs" icon="trash" variant="danger" tooltip="Delete" wire:click="deleteMember('{{ $member['address'] ?? $member['id'] }}')" wire:confirm="Remove this member?" />
+                                    <flux:button size="xs" icon="pencil" tooltip="Edit Member" wire:click="editMemberModal('{{ $member['address'] ?? $member['id'] }}')" />
+                                    <flux:button size="xs" icon="trash" variant="danger" tooltip="Delete" wire:click="confirmDeleteMember('{{ $member['address'] ?? $member['id'] }}')" />
                                 </div>
                             </flux:table.cell>
                         </flux:table.row>
@@ -256,6 +267,21 @@ new #[Title('Network Members')] class extends Component {
                 </flux:table>
             </flux:card>
         @endif
+
+        {{-- Delete Member Modal --}}
+        <flux:modal name="deleteMemberModal" focusable class="max-w-sm">
+            <div class="w-14 h-14 rounded-full bg-red-100 p-4 mt-4 mb-4 mx-auto flex items-center justify-center">
+                <flux:icon name="trash" class="size-6 text-red-600" />
+            </div>
+            <flux:heading size="lg" class="text-center">Remove Member?</flux:heading>
+            <flux:subheading class="text-center mt-2 mb-6">
+                Are you sure you want to remove <span class="font-mono">{{ $delete_member_id }}</span> from this network? This cannot be undone.
+            </flux:subheading>
+            <div class="flex justify-end gap-2">
+                <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>
+                <flux:button variant="danger" wire:click="deleteMember">Remove</flux:button>
+            </div>
+        </flux:modal>
 
         {{-- Edit Member Modal --}}
         <flux:modal name="editMemberModal" focusable class="w-[450px]">
