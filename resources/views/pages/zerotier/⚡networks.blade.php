@@ -66,6 +66,11 @@ new #[Title('ZeroTier Networks')] class extends Component {
         $this->loadNetworks();
     }
 
+    public function openCreateModal(): void
+    {
+        Flux::modal('createNetworkModal')->show();
+    }
+
     public function createNetwork(): void
     {
         if (! auth()->user()->isTeamAdmin()) {
@@ -156,7 +161,7 @@ new #[Title('ZeroTier Networks')] class extends Component {
                 @endif
 
                 @if (auth()->user()->isTeamAdmin() && $tokens->count() > 0)
-                    <flux:button variant="primary" icon="plus" wire:click="$dispatch('open-modal', { name: 'createNetworkModal' })">Create Network</flux:button>
+                    <flux:button variant="primary" icon="plus" wire:click="openCreateModal">Create Network</flux:button>
                 @endif
             </div>
         </div>

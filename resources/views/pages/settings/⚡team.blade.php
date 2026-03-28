@@ -422,7 +422,7 @@ new #[Title('Team Settings')] class extends Component {
             <flux:subheading>Remove yourself from this team.</flux:subheading>
             <div class="flex mt-4">
                 <flux:spacer />
-                <flux:button variant="danger" wire:click="$dispatch('open-modal', { name: 'leaveTeamConfirm' })">Leave</flux:button>
+                <flux:button variant="danger" wire:click="leaveTeamModal">Leave</flux:button>
             </div>
         </flux:card>
         @endif
