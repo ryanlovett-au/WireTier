@@ -15,6 +15,20 @@ new #[Title('ZeroTier Networks')] class extends Component {
     public string $delete_network_id = '';
     public string $delete_network_name = '';
 
+    // Edit network modal
+    public string $editing_network_id   = '';
+    public string $edit_tab             = 'settings';
+    public string $edit_name            = '';
+    public bool   $edit_private         = true;
+    public bool   $edit_broadcast       = true;
+    public int    $edit_multicast_limit = 32;
+    public array  $edit_routes          = [];
+    public array  $edit_ip_pools        = [];
+    public string $new_route_target     = '';
+    public string $new_route_via        = '';
+    public string $new_pool_start       = '';
+    public string $new_pool_end         = '';
+
     // Create network form
     public string $new_network_name = '';
     public bool $new_network_private = true;
@@ -167,6 +181,116 @@ new #[Title('ZeroTier Networks')] class extends Component {
         }
     }
 
+    // ─── Edit Network ────────────────────────────────────────────────
+
+    public function openEditModal(string $networkId): void
+    {
+        $token   = ZerotierToken::findOrFail($this->selectedToken);
+        $service = new ZerotierService($token);
+
+        try {
+            $network = $service->getControllerNetwork($networkId);
+
+            $this->editing_network_id   = $networkId;
+            $this->edit_tab             = 'settings';
+            $this->edit_name            = $network['name'] ?? '';
+            $this->edit_private         = $network['private'] ?? true;
+            $this->edit_broadcast       = $network['enableBroadcast'] ?? true;
+            $this->edit_multicast_limit = $network['multicastLimit'] ?? 32;
+            $this->edit_routes          = array_values($network['routes'] ?? []);
+            $this->edit_ip_pools        = array_values($network['ipAssignmentPools'] ?? []);
+            $this->new_route_target     = '';
+            $this->new_route_via        = '';
+            $this->new_pool_start       = '';
+            $this->new_pool_end         = '';
+
+            Flux::modal('editNetworkModal')->show();
+        } catch (\Exception $e) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load network: '.$e->getMessage());
+        }
+    }
+
+    public function addRoute(): void
+    {
+        $this->validate(['new_route_target' => 'required|string|regex:/^[\d\.\/\:a-fA-F]+$/']);
+
+        $this->edit_routes[] = [
+            'target' => $this->new_route_target,
+            'via'    => $this->new_route_via ?: null,
+            'flags'  => 0,
+            'metric' => 0,
+        ];
+
+        $this->new_route_target = '';
+        $this->new_route_via    = '';
+    }
+
+    public function removeRoute(int $index): void
+    {
+        array_splice($this->edit_routes, $index, 1);
+        $this->edit_routes = array_values($this->edit_routes);
+    }
+
+    public function addIpPool(): void
+    {
+        $this->validate([
+            'new_pool_start' => 'required|ip',
+            'new_pool_end'   => 'required|ip',
+        ]);
+
+        $this->edit_ip_pools[] = [
+            'ipRangeStart' => $this->new_pool_start,
+            'ipRangeEnd'   => $this->new_pool_end,
+        ];
+
+        $this->new_pool_start = '';
+        $this->new_pool_end   = '';
+    }
+
+    public function removeIpPool(int $index): void
+    {
+        array_splice($this->edit_ip_pools, $index, 1);
+        $this->edit_ip_pools = array_values($this->edit_ip_pools);
+    }
+
+    public function saveNetwork(): void
+    {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
+        $this->validate(['edit_name' => 'required|string|max:255']);
+
+        $token   = ZerotierToken::findOrFail($this->selectedToken);
+        $service = new ZerotierService($token);
+
+        try {
+            $service->updateNetwork($this->editing_network_id, [
+                'name'             => $this->edit_name,
+                'private'          => $this->edit_private,
+                'enableBroadcast'  => $this->edit_broadcast,
+                'multicastLimit'   => $this->edit_multicast_limit,
+                'routes'           => $this->edit_routes,
+                'ipAssignmentPools'=> $this->edit_ip_pools,
+                'v4AssignMode'     => ['zt' => count($this->edit_ip_pools) > 0],
+            ]);
+
+            // Sync local DB record if tracked
+            ZerotierNetwork::where('network_id', $this->editing_network_id)->update([
+                'name'    => $this->edit_name,
+                'private' => $this->edit_private,
+            ]);
+
+            Flux::toast(variant: 'success', heading: 'Saved', text: 'Network settings updated.');
+            Flux::modal('editNetworkModal')->close();
+            $this->loadNetworks();
+        } catch (\Exception $e) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to save: '.$e->getMessage());
+        }
+    }
+
+    // ─── Delete Network ──────────────────────────────────────────────
+
     public function confirmDeleteNetwork(string $networkId, string $networkName): void
     {
         if (! auth()->user()->isTeamAdmin()) {
@@ -281,7 +405,8 @@ new #[Title('ZeroTier Networks')] class extends Component {
                                 Members
                             </flux:button>
                             @if (auth()->user()->isTeamAdmin())
-                                <flux:button size="sm" icon="trash" variant="danger" wire:click="confirmDeleteNetwork('{{ $network['nwid'] ?? $network['id'] }}', '{{ addslashes($network['name'] ?? '') }}')" />
+                                <flux:button size="sm" icon="cog-6-tooth" wire:click="openEditModal('{{ $network['nwid'] ?? $network['id'] }}')" tooltip="Network Settings" />
+                                <flux:button size="sm" icon="trash" variant="danger" wire:click="confirmDeleteNetwork('{{ $network['nwid'] ?? $network['id'] }}', '{{ addslashes($network['name'] ?? '') }}')" tooltip="Delete Network" />
                             @endif
                         </div>
                     </div>
@@ -289,6 +414,92 @@ new #[Title('ZeroTier Networks')] class extends Component {
                 @endforeach
             </div>
         @endif
+
+        {{-- Edit Network Modal --}}
+        <flux:modal name="editNetworkModal" focusable class="w-full max-w-2xl">
+            <flux:heading size="lg" class="mb-1">Network Settings</flux:heading>
+            <flux:subheading class="mb-5 font-mono text-xs">{{ $editing_network_id }}</flux:subheading>
+
+            <flux:tabs wire:model="edit_tab" class="mb-4">
+                <flux:tab name="settings">Settings</flux:tab>
+                <flux:tab name="ip_ranges">IP Ranges</flux:tab>
+                <flux:tab name="routes">Managed Routes</flux:tab>
+            </flux:tabs>
+
+            {{-- Settings Panel --}}
+            <div x-show="$wire.edit_tab === 'settings'" class="space-y-5 min-h-[220px]">
+                <flux:input wire:model="edit_name" label="Network Name" />
+                <div class="grid grid-cols-2 gap-4">
+                    <flux:switch wire:model="edit_private" label="Private Network" description="Members must be authorised to join" />
+                    <flux:switch wire:model="edit_broadcast" label="Enable Broadcast" description="Allow broadcast traffic on this network" />
+                </div>
+                <flux:input wire:model="edit_multicast_limit" type="number" min="0" max="1000"
+                    label="Multicast Recipient Limit"
+                    description="Maximum recipients for a multicast/broadcast packet (0 = disabled)" />
+            </div>
+
+            {{-- IP Ranges Panel --}}
+            <div x-show="$wire.edit_tab === 'ip_ranges'" class="min-h-[220px]">
+                @if (count($edit_ip_pools) > 0)
+                    <div class="space-y-2 mb-5">
+                        @foreach ($edit_ip_pools as $i => $pool)
+                            <div class="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                                <flux:icon name="circle-stack" class="size-4 text-zinc-400 shrink-0" />
+                                <span class="font-mono text-sm flex-1">{{ $pool['ipRangeStart'] }} &rarr; {{ $pool['ipRangeEnd'] }}</span>
+                                <flux:button size="xs" icon="x-mark" variant="ghost" wire:click="removeIpPool({{ $i }})" />
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <p class="text-sm text-zinc-400 italic mb-5">No IP ranges configured. Add one below to enable auto-assignment.</p>
+                @endif
+
+                <p class="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500 mb-3">Add Range</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <flux:input wire:model="new_pool_start" label="Range Start" placeholder="10.147.17.1" />
+                    <flux:input wire:model="new_pool_end" label="Range End" placeholder="10.147.17.254" />
+                </div>
+                <div class="mt-6">
+                    <flux:button size="sm" icon="plus" wire:click="addIpPool">Add Range</flux:button>
+                </div>
+            </div>
+
+            {{-- Routes Panel --}}
+            <div x-show="$wire.edit_tab === 'routes'" class="min-h-[220px]">
+                @if (count($edit_routes) > 0)
+                    <div class="space-y-2 mb-5">
+                        @foreach ($edit_routes as $i => $route)
+                            <div class="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                                <flux:icon name="arrow-right-circle" class="size-4 text-zinc-400 shrink-0" />
+                                <span class="font-mono text-sm flex-1">
+                                    {{ $route['target'] }}
+                                    @if (! empty($route['via']))
+                                        <span class="text-zinc-400"> via {{ $route['via'] }}</span>
+                                    @endif
+                                </span>
+                                <flux:button size="xs" icon="x-mark" variant="ghost" wire:click="removeRoute({{ $i }})" />
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <p class="text-sm text-zinc-400 italic mb-5">No managed routes configured.</p>
+                @endif
+
+                <p class="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500 mb-3">Add Route</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <flux:input wire:model="new_route_target" label="Destination (CIDR)" placeholder="10.0.0.0/8" />
+                    <flux:input wire:model="new_route_via" label="Via (optional gateway)" placeholder="10.147.17.1" />
+                </div>
+                <div class="mt-6">
+                    <flux:button size="sm" icon="plus" wire:click="addRoute">Add Route</flux:button>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2" style="margin-top: 3rem;">
+                <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>
+                <flux:button variant="primary" wire:click="saveNetwork">Save Changes</flux:button>
+            </div>
+        </flux:modal>
 
         {{-- Delete Network Modal --}}
         <flux:modal name="deleteNetworkModal" focusable class="max-w-sm">
