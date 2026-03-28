@@ -5,6 +5,17 @@
             <flux:navlist.item :href="route('security.edit')" wire:navigate>{{ __('Security') }}</flux:navlist.item>
             <flux:navlist.item :href="route('appearance.edit')" wire:navigate>{{ __('Appearance') }}</flux:navlist.item>
         </flux:navlist>
+
+        <flux:navlist aria-label="{{ __('Teams') }}" class="mt-4">
+            <flux:navlist.group heading="Teams">
+                <flux:navlist.item :href="route('teams.index')" wire:navigate>{{ __('My Teams') }}</flux:navlist.item>
+                @if (auth()->user()->team)
+                    <flux:navlist.item :href="route('teams.show', ['id' => auth()->user()->current_team])" wire:navigate>
+                        {{ auth()->user()->team->name }}
+                    </flux:navlist.item>
+                @endif
+            </flux:navlist.group>
+        </flux:navlist>
     </div>
 
     <flux:separator class="md:hidden" />

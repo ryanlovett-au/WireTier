@@ -22,4 +22,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ),
         )
         ->name('security.edit');
+
+    // Team routes
+    Route::livewire('settings/teams', 'pages::settings.teams')->name('teams.index');
+    Route::livewire('settings/team', 'pages::settings.team')->name('teams.show');
 });

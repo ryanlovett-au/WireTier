@@ -16,18 +16,28 @@
                         {{ __('Dashboard') }}
                     </flux:sidebar.item>
                 </flux:sidebar.group>
+
+                <flux:sidebar.group :heading="__('ZeroTier')" class="grid">
+                    <flux:sidebar.item icon="globe-alt" :href="route('zerotier.networks')" :current="request()->routeIs('zerotier.networks') || request()->routeIs('zerotier.members')" wire:navigate>
+                        {{ __('Networks') }}
+                    </flux:sidebar.item>
+                    <flux:sidebar.item icon="signal" :href="route('zerotier.peers')" :current="request()->routeIs('zerotier.peers')" wire:navigate>
+                        {{ __('Peers') }}
+                    </flux:sidebar.item>
+                    <flux:sidebar.item icon="key" :href="route('zerotier.tokens')" :current="request()->routeIs('zerotier.tokens')" wire:navigate>
+                        {{ __('Connections') }}
+                    </flux:sidebar.item>
+                </flux:sidebar.group>
             </flux:sidebar.nav>
 
             <flux:spacer />
 
             <flux:sidebar.nav>
-                <flux:sidebar.item icon="folder-git-2" href="https://github.com/laravel/livewire-starter-kit" target="_blank">
-                    {{ __('Repository') }}
+                @if (auth()->user()->team)
+                <flux:sidebar.item icon="users" :href="route('teams.show', ['id' => auth()->user()->current_team])" wire:navigate>
+                    {{ auth()->user()->team->name }}
                 </flux:sidebar.item>
-
-                <flux:sidebar.item icon="book-open-text" href="https://laravel.com/docs/starter-kits#livewire" target="_blank">
-                    {{ __('Documentation') }}
-                </flux:sidebar.item>
+                @endif
             </flux:sidebar.nav>
 
             <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
