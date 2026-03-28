@@ -274,8 +274,16 @@ new #[Title('Team Settings')] class extends Component {
         {{-- Current Team Info --}}
         <flux:card class="mb-6">
             <div class="flex items-center gap-3">
-                <div class="relative w-12 h-12 rounded-full bg-{{ $current_team->colour }}-400/20 text-{{ $current_team->colour }}-600 flex items-center justify-center">
-                    <flux:icon variant="solid" name="{{ $current_team->icon }}" class="size-5" />
+                @php
+                    $teamColours = [
+                        'blue'=>'#3b82f6','red'=>'#ef4444','green'=>'#22c55e','purple'=>'#a855f7',
+                        'orange'=>'#f97316','yellow'=>'#eab308','pink'=>'#ec4899','indigo'=>'#6366f1',
+                        'cyan'=>'#06b6d4','zinc'=>'#71717a','lime'=>'#84cc16','teal'=>'#14b8a6',
+                    ];
+                    $tc = $teamColours[$current_team->colour] ?? '#6366f1';
+                @endphp
+                <div style="width:3rem;height:3rem;border-radius:0.5rem;background:{{ $tc }};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <flux:icon name="{{ $current_team->icon }}" class="size-6 text-white" />
                 </div>
                 <div>
                     <flux:heading size="lg">{{ $current_team->name }}</flux:heading>
