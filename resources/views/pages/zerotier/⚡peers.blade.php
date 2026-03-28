@@ -73,9 +73,9 @@ new #[Title('Node Status & Peers')] class extends Component {
             <flux:card>
                 <div class="text-center py-8">
                     <flux:icon name="signal-slash" class="mx-auto size-12 text-zinc-400 mb-4" />
-                    <flux:heading>No Connections</flux:heading>
+                    <flux:heading>No Controllers</flux:heading>
                     <flux:subheading class="mb-4">Add a ZeroTier connection first.</flux:subheading>
-                    <flux:button variant="primary" :href="route('zerotier.tokens')" wire:navigate>Add Connection</flux:button>
+                    <flux:button variant="primary" :href="route('zerotier.tokens')" wire:navigate>Add Controller</flux:button>
                 </div>
             </flux:card>
         @else

@@ -5,7 +5,7 @@ use Livewire\Component;
 use App\Models\ZerotierToken;
 use App\Services\ZerotierService;
 
-new #[Title('ZeroTier Connections')] class extends Component {
+new #[Title('ZeroTier Controllers')] class extends Component {
     public $tokens;
 
     public string $new_name = '';
@@ -141,7 +141,7 @@ new #[Title('ZeroTier Connections')] class extends Component {
 
 <div class="mx-auto max-w-4xl p-6">
         <div class="mb-6">
-            <flux:heading size="xl">ZeroTier Connections</flux:heading>
+            <flux:heading size="xl">ZeroTier Controllers</flux:heading>
             <flux:subheading>Connect to your self-hosted ZeroTier instances by adding their API tokens.</flux:subheading>
         </div>
 

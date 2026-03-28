@@ -78,7 +78,7 @@
                         View Peers & Status
                     </flux:button>
                     <flux:button variant="ghost" icon="key" :href="route('zerotier.tokens')" wire:navigate class="w-full justify-start">
-                        Manage Connections
+                        Manage Controllers
                     </flux:button>
                     @endif
                     <flux:button variant="ghost" icon="users" :href="route('teams.show', ['id' => auth()->user()->current_team])" wire:navigate class="w-full justify-start">

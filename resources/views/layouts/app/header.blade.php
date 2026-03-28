@@ -53,7 +53,7 @@
                         {{ __('Peers') }}
                     </flux:sidebar.item>
                     <flux:sidebar.item icon="key" :href="route('zerotier.tokens')" wire:navigate>
-                        {{ __('Connections') }}
+                        {{ __('Controllers') }}
                     </flux:sidebar.item>
                 </flux:sidebar.group>
             </flux:sidebar.nav>
