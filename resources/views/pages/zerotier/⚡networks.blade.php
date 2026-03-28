@@ -14,7 +14,39 @@ new #[Title('ZeroTier Networks')] class extends Component {
     // Create network form
     public string $new_network_name = '';
     public bool $new_network_private = true;
-    public string $new_network_subnet = '10.147.17.0/24';
+    public string $new_network_subnet = '';
+    public array $subnet_suggestions = [];
+
+    public function generateSubnetSuggestions(): void
+    {
+        $suggestions = [];
+        $used = [];
+
+        while (count($suggestions) < 6) {
+            // Alternate between 10.x.x.0/24 and 172.x.x.0/24
+            if (count($suggestions) % 2 === 0) {
+                // 10.x.x.0/24 — avoid .0.x and .1.x (too common)
+                $second = rand(2, 254);
+                $third  = rand(0, 254);
+                $subnet = "10.{$second}.{$third}.0/24";
+            } else {
+                // 172.16.x.0/24 through 172.31.x.0/24
+                $second = rand(16, 31);
+                $third  = rand(0, 254);
+                $subnet = "172.{$second}.{$third}.0/24";
+            }
+
+            if (! in_array($subnet, $used)) {
+                $used[]        = $subnet;
+                $suggestions[] = $subnet;
+            }
+        }
+
+        $this->subnet_suggestions = $suggestions;
+        if (empty($this->new_network_subnet)) {
+            $this->new_network_subnet = $suggestions[0];
+        }
+    }
 
     public function mount()
     {
@@ -22,6 +54,8 @@ new #[Title('ZeroTier Networks')] class extends Component {
             $this->redirect('/settings/teams');
             return;
         }
+
+        $this->generateSubnetSuggestions();
 
         $this->tokens = ZerotierToken::where('team_id', auth()->user()->team->id)
             ->where('is_active', true)
@@ -68,6 +102,9 @@ new #[Title('ZeroTier Networks')] class extends Component {
 
     public function openCreateModal(): void
     {
+        $this->new_network_name   = '';
+        $this->new_network_subnet = '';
+        $this->generateSubnetSuggestions();
         Flux::modal('createNetworkModal')->show();
     }
 
@@ -234,15 +271,32 @@ new #[Title('ZeroTier Networks')] class extends Component {
         @endif
 
         {{-- Create Network Modal --}}
-        <flux:modal name="createNetworkModal" focusable class="w-[450px]">
+        <flux:modal name="createNetworkModal" focusable class="w-[480px]">
             <flux:heading size="lg" class="mb-4">Create Network</flux:heading>
 
-            <flux:input wire:model="new_network_name" label="Network Name" class="mb-4" />
-            <flux:input wire:model="new_network_subnet" label="IPv4 Subnet" description="e.g. 10.147.17.0/24" class="mb-4" />
+            <flux:input wire:model="new_network_name" label="Network Name" class="mb-5" />
 
-            <flux:switch wire:model="new_network_private" label="Private Network" description="Members must be authorized to join" class="mb-4" />
+            <flux:label class="mb-2">IPv4 Subnet</flux:label>
+            <div class="flex flex-wrap gap-2 mb-6">
+                @foreach ($subnet_suggestions as $suggestion)
+                    <button
+                        type="button"
+                        wire:click="$set('new_network_subnet', '{{ $suggestion }}')"
+                        class="px-2.5 py-1 rounded-md text-xs font-mono border border-zinc-300 text-zinc-600 bg-white hover:border-zinc-500 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-600 transition-colors"
+                        :style="$wire.new_network_subnet === '{{ $suggestion }}' ? 'background:#18181b;color:#fff;border-color:#18181b;' : ''"
+                    >{{ $suggestion }}</button>
+                @endforeach
+                <button
+                    type="button"
+                    wire:click="generateSubnetSuggestions"
+                    class="px-2.5 py-1 rounded-md text-xs border border-dashed border-zinc-300 text-zinc-400 hover:border-zinc-500 hover:text-zinc-600 dark:border-zinc-600 dark:text-zinc-500 dark:hover:border-zinc-400 transition-colors"
+                >↺ New</button>
+            </div>
+            <flux:input wire:model="new_network_subnet" placeholder="or type your own…" class="mb-5" />
 
-            <div class="flex justify-end space-x-2">
+            <flux:switch wire:model="new_network_private" label="Private Network" description="Members must be authorized to join" class="mb-6" />
+
+            <div class="flex justify-end space-x-2 mt-4">
                 <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>
                 <flux:button variant="primary" wire:click="createNetwork()">Create</flux:button>
             </div>
