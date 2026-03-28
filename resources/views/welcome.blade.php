@@ -268,6 +268,7 @@
             </div>
             <div class="flex items-center gap-5 text-zinc-500" style="font-size:14px;">
                 <a href="https://www.zerotier.com/" target="_blank" class="hover:text-zinc-300 transition-colors no-underline">ZeroTier</a>
+                <a href="https://laravel.com" target="_blank" class="hover:text-zinc-300 transition-colors no-underline">Laravel</a>
                 <a href="https://github.com/ryanlovett/wiretier" target="_blank" class="hover:text-zinc-300 transition-colors no-underline">GitHub</a>
                 <span>GPL-3.0</span>
             </div>
