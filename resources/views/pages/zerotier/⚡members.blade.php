@@ -187,7 +187,7 @@ new #[Title('Network Members')] class extends Component {
     }
 }; ?>
 
-<div class="mx-auto max-w-5xl p-6">
+<div class="mx-auto max-w-5xl p-6" wire:poll.60s="loadMembers">
         <div class="flex items-center justify-between mb-6">
             <div>
                 <div class="flex items-center gap-2 mb-1">
