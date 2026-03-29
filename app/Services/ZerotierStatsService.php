@@ -9,66 +9,42 @@ use Illuminate\Support\Facades\Cache;
 class ZerotierStatsService
 {
     /**
-     * Get authorised member counts for all tracked networks, cached per network for 5 minutes.
+     * Get authorised member counts from the database (no API calls).
      *
-     * Returns ['total' => int, 'by_network' => [network_id => int]]
+     * Returns ['total' => int, 'by_network' => [network_id => int], 'last_updated' => ?int]
      */
-    public static function authorizedMembers(?string $teamId = null): array
+    public static function authorisedMembers(?string $teamId = null): array
     {
-        $query = ZerotierNetwork::with('zerotierToken');
+        $cacheKey = 'zt_stats_authorised_'.($teamId ?? 'all');
 
-        if ($teamId) {
-            $query->where('team_id', $teamId);
-        }
+        return Cache::flexible($cacheKey, [30, 60], function () use ($teamId) {
+            $query = ZerotierNetwork::query();
 
-        $networks = $query->get();
-
-        $total = 0;
-        $byNetwork = [];
-
-        foreach ($networks as $network) {
-            $token = $network->zerotierToken;
-
-            if (! $token || ! $token->is_active) {
-                continue;
+            if ($teamId) {
+                $query->where('team_id', $teamId);
             }
 
-            $count = Cache::remember(
-                "zt_members_{$network->network_id}",
-                60,
-                function () use ($token, $network) {
-                    Cache::put('zt_members_last_updated', now()->timestamp, 60);
-                    try {
-                        $service = new ZerotierService($token);
-                        $members = $service->getNetworkMembers($network->network_id);
+            $networks = $query->withCount([
+                'members as authorised_count' => fn ($q) => $q->where('authorised', true),
+            ])->get();
 
-                        // Count only authorised members
-                        $authorized = 0;
-                        foreach (array_keys($members) as $nodeId) {
-                            try {
-                                $member = $service->getNetworkMember($network->network_id, $nodeId);
-                                if ($member['authorized'] ?? false) {
-                                    $authorized++;
-                                }
-                            } catch (\Exception) {
-                                // skip
-                            }
-                        }
+            $total = 0;
+            $byNetwork = [];
 
-                        return $authorized;
-                    } catch (\Exception) {
-                        return null; // null = couldn't reach API
-                    }
-                }
-            );
-
-            if ($count !== null) {
+            foreach ($networks as $network) {
+                $count = $network->authorised_count ?? 0;
                 $total += $count;
                 $byNetwork[$network->network_id] = $count;
             }
-        }
 
-        return ['total' => $total, 'by_network' => $byNetwork];
+            $lastSynced = $networks->max('synced_at');
+
+            return [
+                'total' => $total,
+                'by_network' => $byNetwork,
+                'last_updated' => $lastSynced?->timestamp,
+            ];
+        });
     }
 
     /**

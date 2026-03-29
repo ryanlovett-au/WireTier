@@ -13,7 +13,7 @@
 
         @if (auth()->user()->team)
         @php
-            $ztStats = \App\Services\ZerotierStatsService::authorizedMembers(auth()->user()->team->id);
+            $ztStats = \App\Services\ZerotierStatsService::authorisedMembers(auth()->user()->team->id);
         @endphp
         <div class="grid auto-rows-min gap-4 md:grid-cols-3">
             {{-- Networks Count --}}
@@ -47,7 +47,7 @@
                 </div>
             </flux:card>
 
-            {{-- Authorized Devices --}}
+            {{-- Authorised Devices --}}
             <flux:card>
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-full bg-emerald-400/20 text-emerald-600 flex items-center justify-center">
@@ -55,12 +55,11 @@
                     </div>
                     <div>
                         <flux:heading size="lg">{{ $ztStats['total'] }}</flux:heading>
-                        <flux:subheading>Authorized Devices</flux:subheading>
+                        <flux:subheading>Authorised Devices</flux:subheading>
                     </div>
                 </div>
-                @php $ztLastUpdated = \Illuminate\Support\Facades\Cache::get('zt_members_last_updated'); @endphp
                 <div
-                    x-data="{ ts: {{ $ztLastUpdated ?? 0 }}, label: '' }"
+                    x-data="{ ts: {{ $ztStats['last_updated'] ?? 0 }}, label: '' }"
                     x-init="setInterval(() => {
                         if (!ts) { label = 'pending'; return; }
                         let s = Math.floor(Date.now()/1000) - ts;

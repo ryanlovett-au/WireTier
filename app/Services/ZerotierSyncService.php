@@ -132,11 +132,13 @@ class ZerotierSyncService
             }
         }
 
-        // Clear team-level network caches for all affected teams
+        // Clear team-level caches for all affected teams
         $teamIds = $networks->pluck('team_id')->unique();
         foreach ($teamIds as $teamId) {
             Cache::forget("team_{$teamId}_networks_{$tokenId}");
+            Cache::forget("zt_stats_authorised_{$teamId}");
         }
+        Cache::forget('zt_stats_authorised_all');
 
         return $synced;
     }
