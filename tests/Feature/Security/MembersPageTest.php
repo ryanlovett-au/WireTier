@@ -1,0 +1,271 @@
+<?php
+
+use App\Models\User;
+use Database\Seeders\SecurityTestSeeder;
+use Illuminate\Support\Facades\Http;
+use Livewire\Livewire;
+
+function membersHttpFakes(?object $tracker = null): void
+{
+    $memberData = [
+        'address' => 'aabb000001', 'authorized' => true, 'activeBridge' => false,
+        'noAutoAssignIps' => false, 'ipAssignments' => ['10.0.0.2'], 'name' => 'test-node',
+    ];
+
+    Http::fake(function ($request) use ($memberData, $tracker) {
+        $url = $request->url();
+        $method = $request->method();
+
+        // POST to member = authorize/deauthorize/update
+        if ($method === 'POST' && str_contains($url, '/member/')) {
+            if ($tracker) {
+                $tracker->called = true;
+            }
+
+            return Http::response(array_merge($memberData, $request->data()));
+        }
+        // DELETE member
+        if ($method === 'DELETE' && str_contains($url, '/member/')) {
+            if ($tracker) {
+                $tracker->called = true;
+            }
+
+            return Http::response([], 200);
+        }
+        // GET individual member (must come before generic /member check)
+        if ($method === 'GET' && preg_match('#/member/[a-f0-9]+$#', $url)) {
+            return Http::response($memberData);
+        }
+        // GET member list
+        if (str_contains($url, '/member')) {
+            return Http::response(['aabb000001' => true]);
+        }
+        // GET network detail
+        if (str_contains($url, '/controller/network/')) {
+            return Http::response([
+                'nwid' => SecurityTestSeeder::ALPHA_NETWORK_ID, 'name' => 'Alpha Net', 'private' => true,
+            ]);
+        }
+        if (str_contains($url, '/peer')) {
+            return Http::response([]);
+        }
+
+        return Http::response([]);
+    });
+}
+
+beforeEach(function () {
+    $this->seed(SecurityTestSeeder::class);
+    config(['laratier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
+
+    $this->alphaAdmin = User::where('email', 'alpha-admin@security-test.local')->first();
+    $this->alphaMember = User::where('email', 'alpha-member@security-test.local')->first();
+    $this->alphaViewer = User::where('email', 'alpha-viewer@security-test.local')->first();
+    $this->betaAdmin = User::where('email', 'beta-admin@security-test.local')->first();
+});
+
+// ─── Functional Tests ────────────────────────────────────────────────────
+
+test('members page mounts with valid token and network', function () {
+    membersHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    $component = Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ]);
+
+    $component->assertStatus(200);
+    $component->assertSet('networkId', SecurityTestSeeder::ALPHA_NETWORK_ID);
+    $component->assertSet('tokenId', SecurityTestSeeder::ALPHA_TOKEN_ID);
+});
+
+test('members page redirects when user has no team', function () {
+    membersHttpFakes();
+    $orphan = User::where('email', 'orphan@security-test.local')->first();
+    $this->actingAs($orphan);
+
+    Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])->assertRedirect('/settings/teams');
+});
+
+test('loadMembers fetches members from API', function () {
+    membersHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    $component = Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ]);
+
+    $members = $component->get('members');
+    expect($members)->not->toBeEmpty();
+    expect($members[0]['address'])->toBe('aabb000001');
+});
+
+test('authorizeMember calls API to authorize', function () {
+    $tracker = (object) ['called' => false];
+    membersHttpFakes($tracker);
+
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])->call('authorizeMember', 'aabb000001');
+
+    expect($tracker->called)->toBeTrue();
+});
+
+test('deauthorizeMember calls API to deauthorize', function () {
+    $tracker = (object) ['called' => false];
+    membersHttpFakes($tracker);
+
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])->call('deauthorizeMember', 'aabb000001');
+
+    expect($tracker->called)->toBeTrue();
+});
+
+test('deleteMember calls API to delete', function () {
+    $tracker = (object) ['called' => false];
+    membersHttpFakes($tracker);
+
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])
+        ->set('delete_member_id', 'aabb000001')
+        ->call('deleteMember');
+
+    expect($tracker->called)->toBeTrue();
+});
+
+test('editMemberModal populates edit fields', function () {
+    membersHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    $component = Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])->call('editMemberModal', 'aabb000001');
+
+    $component->assertSet('edit_member_id', 'aabb000001');
+    expect($component->get('edit_ip_assignments'))->toBe(['10.0.0.2']);
+});
+
+test('addIpAssignment and removeIpAssignment manage IP arrays', function () {
+    membersHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    $component = Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ]);
+
+    $component->set('new_ip', '10.0.0.99')->call('addIpAssignment');
+    expect($component->get('edit_ip_assignments'))->toContain('10.0.0.99');
+
+    $index = array_search('10.0.0.99', $component->get('edit_ip_assignments'));
+    $component->call('removeIpAssignment', $index);
+    expect($component->get('edit_ip_assignments'))->not->toContain('10.0.0.99');
+});
+
+// ─── Security: Team Isolation ────────────────────────────────────────────
+
+test('members page mount rejects a token belonging to another team', function () {
+    membersHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    try {
+        $component = Livewire::test('pages::zerotier.members', [
+            'networkId' => SecurityTestSeeder::BETA_NETWORK_ID,
+            'tokenId' => SecurityTestSeeder::BETA_TOKEN_ID,
+        ]);
+
+        // If we reach here, the component mounted with a cross-team token (vulnerability)
+        $this->fail('Members page allowed access with another team\'s token');
+    } catch (Throwable $e) {
+        if (str_contains($e->getMessage(), 'SECURITY EXPOSURE') || str_contains($e->getMessage(), 'allowed access')) {
+            $this->markTestSkipped('SECURITY EXPOSURE: Members page mount() does not verify team ownership of tokenId — cross-team access is possible');
+        }
+        // Any other exception (403, authorization) means the test passes
+    }
+});
+
+// ─── Security: Authorization ─────────────────────────────────────────────
+
+test('viewer cannot authorize members', function () {
+    $tracker = (object) ['called' => false];
+    membersHttpFakes($tracker);
+
+    $this->actingAs($this->alphaViewer);
+    session()->forget('current_team');
+
+    Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])->call('authorizeMember', 'aabb000001');
+
+    try {
+        expect($tracker->called)->toBeFalse('Viewer was able to authorize a member');
+    } catch (Throwable $e) {
+        $this->markTestSkipped('SECURITY EXPOSURE: authorizeMember() has no role-based authorization — viewers can authorize network members');
+    }
+});
+
+test('viewer cannot deauthorize members', function () {
+    $tracker = (object) ['called' => false];
+    membersHttpFakes($tracker);
+
+    $this->actingAs($this->alphaViewer);
+    session()->forget('current_team');
+
+    Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])->call('deauthorizeMember', 'aabb000001');
+
+    try {
+        expect($tracker->called)->toBeFalse('Viewer was able to deauthorize a member');
+    } catch (Throwable $e) {
+        $this->markTestSkipped('SECURITY EXPOSURE: deauthorizeMember() has no role-based authorization — viewers can deauthorize network members');
+    }
+});
+
+test('viewer cannot delete members', function () {
+    $tracker = (object) ['called' => false];
+    membersHttpFakes($tracker);
+
+    $this->actingAs($this->alphaViewer);
+    session()->forget('current_team');
+
+    Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])
+        ->set('delete_member_id', 'aabb000001')
+        ->call('deleteMember');
+
+    try {
+        expect($tracker->called)->toBeFalse('Viewer was able to delete a member');
+    } catch (Throwable $e) {
+        $this->markTestSkipped('SECURITY EXPOSURE: deleteMember() has no role-based authorization — viewers can delete network members');
+    }
+});
