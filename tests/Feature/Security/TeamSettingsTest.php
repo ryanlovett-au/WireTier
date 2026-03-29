@@ -270,3 +270,14 @@ test('member cannot change roles', function () {
         $this->markTestSkipped('SECURITY EXPOSURE: changeRole() isTeamAdmin() check does not block members — members can escalate privileges');
     }
 });
+
+// ─── Security: Data Exposure ─────────────────────────────────────────────
+
+test('team model does not expose sensitive fields in serialization', function () {
+    // Team is used as a public Livewire property. Verify its fields are non-sensitive.
+    $team = new Team;
+    $fillable = $team->getFillable();
+
+    // Team only has name, icon, colour — all non-sensitive display fields
+    expect($fillable)->toBe(['name', 'icon', 'colour']);
+});

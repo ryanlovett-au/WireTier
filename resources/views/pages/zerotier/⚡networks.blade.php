@@ -672,7 +672,7 @@ new #[Title('ZeroTier Networks')] class extends Component
                             </flux:button>
                             @if (auth()->user()->isTeamAdmin())
                                 <flux:button size="sm" icon="cog-6-tooth" wire:click="openEditModal('{{ $network['nwid'] ?? $network['id'] }}')" tooltip="Network Settings" />
-                                <flux:button size="sm" icon="trash" variant="danger" wire:click="confirmDeleteNetwork('{{ $network['nwid'] ?? $network['id'] }}', '{{ addslashes($network['name'] ?? '') }}')" tooltip="Delete Network" />
+                                <flux:button size="sm" icon="trash" variant="danger" wire:click="confirmDeleteNetwork('{{ $network['nwid'] ?? $network['id'] }}', {{ Js::from($network['name'] ?? '') }})" tooltip="Delete Network" />
                             @endif
                         </div>
                     </div>

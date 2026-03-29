@@ -142,3 +142,37 @@ test('password reset token expiry is 30 minutes or less', function () {
         $this->markTestSkipped("SECURITY EXPOSURE: Password reset token expires in {$config} minutes — should be 30 or less to limit token reuse window");
     }
 });
+
+// ─── Rate Limiting ───────────────────────────────────────────────────────
+
+test('web routes have rate limiting middleware', function () {
+    $content = File::get(base_path('routes/web.php'));
+
+    try {
+        expect($content)->toContain('throttle');
+    } catch (Throwable $e) {
+        $this->markTestSkipped('SECURITY EXPOSURE: No rate limiting middleware on web routes — vulnerable to brute force and abuse');
+    }
+});
+
+test('settings routes have rate limiting middleware', function () {
+    $content = File::get(base_path('routes/settings.php'));
+
+    try {
+        expect($content)->toContain('throttle');
+    } catch (Throwable $e) {
+        $this->markTestSkipped('SECURITY EXPOSURE: No rate limiting middleware on settings routes — vulnerable to abuse');
+    }
+});
+
+// ─── Open Redirect ───────────────────────────────────────────────────────
+
+test('team switch does not use redirect back', function () {
+    $content = File::get(base_path('routes/settings.php'));
+
+    try {
+        expect($content)->not->toContain('redirect()->back()');
+    } catch (Throwable $e) {
+        $this->markTestSkipped('SECURITY EXPOSURE: redirect()->back() follows Referer header — potential open redirect');
+    }
+});

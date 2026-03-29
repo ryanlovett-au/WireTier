@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Models\ZerotierToken;
 use Database\Seeders\SecurityTestSeeder;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
@@ -175,6 +176,19 @@ test('toggleToken flips is_active', function () {
 
     $token->refresh();
     expect($token->is_active)->toBeFalse();
+});
+
+// ─── Security: Defense-in-Depth Admin Checks ─────────────────────────────
+
+test('token methods have individual isAdmin checks', function () {
+    $content = File::get(resource_path('views/pages/zerotier/⚡tokens.blade.php'));
+
+    // Count isAdmin occurrences — mount + addToken + testToken + toggleToken + updateToken + deleteToken = 6 minimum
+    $count = substr_count($content, 'isAdmin()');
+
+    expect($count)->toBeGreaterThanOrEqual(6,
+        'Not all token methods have individual isAdmin() checks'
+    );
 });
 
 // ─── Security: Token Data Exposure ───────────────────────────────────────
