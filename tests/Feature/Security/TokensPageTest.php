@@ -52,7 +52,7 @@ test('addToken validates required fields', function () {
         ->assertHasErrors(['new_name', 'new_token', 'new_host']);
 });
 
-test('addToken creates a token for the current team', function () {
+test('addToken creates a global token', function () {
     $this->actingAs($this->superAdmin);
 
     Livewire::test('pages::zerotier.tokens')
@@ -64,65 +64,64 @@ test('addToken creates a token for the current team', function () {
 
     $token = ZerotierToken::where('name', 'Test Controller')->first();
     expect($token)->not->toBeNull();
-    expect($token->team_id)->toBe(SecurityTestSeeder::ADMIN_TEAM_ID);
     expect($token->host)->toBe('http://10.0.0.1:9993');
-    expect($token->node_address)->toBe('aaaa000001'); // from Http::fake status response
+    expect($token->node_address)->toBe('aaaa000001');
+});
+
+test('admin can see all tokens', function () {
+    $this->actingAs($this->superAdmin);
+
+    $component = Livewire::test('pages::zerotier.tokens');
+    $tokens = $component->get('tokens');
+
+    // Seeder creates 2 global tokens (Alpha Controller, Beta Controller)
+    expect($tokens->count())->toBeGreaterThanOrEqual(2);
 });
 
 test('editTokenModal populates edit fields', function () {
     $this->actingAs($this->superAdmin);
 
-    $adminToken = ZerotierToken::where('team_id', SecurityTestSeeder::ADMIN_TEAM_ID)->first();
-    if (! $adminToken) {
-        // Create one for the admin team so the test is valid
-        $adminToken = new ZerotierToken;
-        $adminToken->team_id = SecurityTestSeeder::ADMIN_TEAM_ID;
-        $adminToken->name = 'Admin Token';
-        $adminToken->token = 'admintoken';
-        $adminToken->host = 'http://localhost:9993';
-        $adminToken->save();
-    }
+    $token = ZerotierToken::first();
 
     $component = Livewire::test('pages::zerotier.tokens')
-        ->call('editTokenModal', $adminToken->id);
+        ->call('editTokenModal', $token->id);
 
-    $component->assertSet('edit_id', $adminToken->id);
-    $component->assertSet('edit_name', $adminToken->name);
-    $component->assertSet('edit_host', $adminToken->host);
+    $component->assertSet('edit_id', $token->id);
+    $component->assertSet('edit_name', $token->name);
+    $component->assertSet('edit_host', $token->host);
 });
 
 test('updateToken updates name and host', function () {
     $this->actingAs($this->superAdmin);
 
-    $adminToken = new ZerotierToken;
-    $adminToken->team_id = SecurityTestSeeder::ADMIN_TEAM_ID;
-    $adminToken->name = 'Original';
-    $adminToken->token = 'admintoken';
-    $adminToken->host = 'http://localhost:9993';
-    $adminToken->save();
+    $token = new ZerotierToken;
+    $token->name = 'Original';
+    $token->token = 'admintoken';
+    $token->host = 'http://localhost:9993';
+    $token->save();
 
     Livewire::test('pages::zerotier.tokens')
-        ->set('edit_id', $adminToken->id)
+        ->set('edit_id', $token->id)
         ->set('edit_name', 'Renamed Controller')
         ->set('edit_host', 'http://10.0.0.2:9993')
         ->call('updateToken')
         ->assertHasNoErrors();
 
-    $adminToken->refresh();
-    expect($adminToken->name)->toBe('Renamed Controller');
-    expect($adminToken->host)->toBe('http://10.0.0.2:9993');
+    $token->refresh();
+    expect($token->name)->toBe('Renamed Controller');
+    expect($token->host)->toBe('http://10.0.0.2:9993');
 });
 
 test('deleteToken removes the token from database', function () {
     $this->actingAs($this->superAdmin);
 
-    $adminToken = new ZerotierToken;
-    $adminToken->team_id = SecurityTestSeeder::ADMIN_TEAM_ID;
-    $adminToken->name = 'To Delete';
-    $adminToken->token = 'deleteme';
-    $adminToken->host = 'http://localhost:9993';
-    $adminToken->save();
-    $tokenId = $adminToken->id;
+    // Create a token with no associated networks
+    $token = new ZerotierToken;
+    $token->name = 'To Delete';
+    $token->token = 'deleteme';
+    $token->host = 'http://localhost:9993';
+    $token->save();
+    $tokenId = $token->id;
 
     Livewire::test('pages::zerotier.tokens')
         ->set('delete_id', $tokenId)
@@ -131,134 +130,60 @@ test('deleteToken removes the token from database', function () {
     expect(ZerotierToken::find($tokenId))->toBeNull();
 });
 
+test('deleteToken blocked when token has active networks', function () {
+    $this->actingAs($this->superAdmin);
+
+    // ALPHA_TOKEN_ID has an associated network from the seeder
+    $component = Livewire::test('pages::zerotier.tokens')
+        ->set('delete_id', SecurityTestSeeder::ALPHA_TOKEN_ID)
+        ->call('deleteToken');
+
+    // Token should NOT be deleted
+    expect(ZerotierToken::find(SecurityTestSeeder::ALPHA_TOKEN_ID))->not->toBeNull();
+});
+
 test('testToken updates node address on success', function () {
     $this->actingAs($this->superAdmin);
 
-    $adminToken = new ZerotierToken;
-    $adminToken->team_id = SecurityTestSeeder::ADMIN_TEAM_ID;
-    $adminToken->name = 'Test Me';
-    $adminToken->token = 'testtoken';
-    $adminToken->host = 'http://localhost:9993';
-    $adminToken->node_address = null;
-    $adminToken->save();
+    $token = new ZerotierToken;
+    $token->name = 'Test Me';
+    $token->token = 'testtoken';
+    $token->host = 'http://localhost:9993';
+    $token->node_address = null;
+    $token->save();
 
     Livewire::test('pages::zerotier.tokens')
-        ->call('testToken', $adminToken->id);
+        ->call('testToken', $token->id);
 
-    $adminToken->refresh();
-    expect($adminToken->node_address)->toBe('aaaa000001');
-    expect($adminToken->is_active)->toBeTrue();
+    $token->refresh();
+    expect($token->node_address)->toBe('aaaa000001');
+    expect($token->is_active)->toBeTrue();
 });
 
 test('toggleToken flips is_active', function () {
     $this->actingAs($this->superAdmin);
 
-    $adminToken = new ZerotierToken;
-    $adminToken->team_id = SecurityTestSeeder::ADMIN_TEAM_ID;
-    $adminToken->name = 'Toggle Me';
-    $adminToken->token = 'toggletoken';
-    $adminToken->host = 'http://localhost:9993';
-    $adminToken->is_active = true;
-    $adminToken->save();
+    $token = new ZerotierToken;
+    $token->name = 'Toggle Me';
+    $token->token = 'toggletoken';
+    $token->host = 'http://localhost:9993';
+    $token->is_active = true;
+    $token->save();
 
     Livewire::test('pages::zerotier.tokens')
-        ->call('toggleToken', $adminToken->id);
+        ->call('toggleToken', $token->id);
 
-    $adminToken->refresh();
-    expect($adminToken->is_active)->toBeFalse();
+    $token->refresh();
+    expect($token->is_active)->toBeFalse();
 });
 
-// ─── Security: Team Isolation ────────────────────────────────────────────
+// ─── Security: Token Data Exposure ───────────────────────────────────────
 
-test('loadTokens only returns tokens for the admin team', function () {
-    $this->actingAs($this->superAdmin);
+test('ZerotierToken hides sensitive fields from serialization', function () {
+    $token = new ZerotierToken;
+    $hidden = $token->getHidden();
 
-    $component = Livewire::test('pages::zerotier.tokens');
-    $tokens = $component->get('tokens');
-
-    try {
-        foreach ($tokens as $token) {
-            expect($token->team_id)->toBe(SecurityTestSeeder::ADMIN_TEAM_ID,
-                "Token '{$token->name}' belongs to team {$token->team_id} but admin team is ".SecurityTestSeeder::ADMIN_TEAM_ID
-            );
-        }
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: ZerotierToken::all() is not scoped to current team — tokens from all teams are visible');
-    }
-});
-
-test('testToken rejects a token belonging to another team', function () {
-    $this->actingAs($this->superAdmin);
-
-    $betaToken = ZerotierToken::find(SecurityTestSeeder::BETA_TOKEN_ID);
-    $originalAddress = $betaToken->node_address;
-
-    Livewire::test('pages::zerotier.tokens')
-        ->call('testToken', SecurityTestSeeder::BETA_TOKEN_ID);
-
-    $betaToken->refresh();
-
-    try {
-        expect($betaToken->node_address)->toBe($originalAddress,
-            'Beta token node_address was modified by admin team user'
-        );
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: testToken() does not verify team ownership — cross-team token testing is possible');
-    }
-});
-
-test('toggleToken rejects a token belonging to another team', function () {
-    $this->actingAs($this->superAdmin);
-
-    $betaToken = ZerotierToken::find(SecurityTestSeeder::BETA_TOKEN_ID);
-    $originalActive = $betaToken->is_active;
-
-    Livewire::test('pages::zerotier.tokens')
-        ->call('toggleToken', SecurityTestSeeder::BETA_TOKEN_ID);
-
-    $betaToken->refresh();
-
-    try {
-        expect($betaToken->is_active)->toBe($originalActive,
-            'Beta token is_active was changed by admin team user'
-        );
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: toggleToken() does not verify team ownership — cross-team token toggling is possible');
-    }
-});
-
-test('updateToken rejects a token belonging to another team', function () {
-    $this->actingAs($this->superAdmin);
-
-    Livewire::test('pages::zerotier.tokens')
-        ->set('edit_id', SecurityTestSeeder::BETA_TOKEN_ID)
-        ->set('edit_name', 'HACKED')
-        ->set('edit_host', 'http://evil.com')
-        ->call('updateToken');
-
-    $betaToken = ZerotierToken::find(SecurityTestSeeder::BETA_TOKEN_ID);
-
-    try {
-        expect($betaToken->name)->not->toBe('HACKED',
-            'Beta token name was changed by admin team user'
-        );
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: updateToken() does not verify team ownership — cross-team token updates are possible');
-    }
-});
-
-test('deleteToken rejects a token belonging to another team', function () {
-    $this->actingAs($this->superAdmin);
-
-    Livewire::test('pages::zerotier.tokens')
-        ->set('delete_id', SecurityTestSeeder::BETA_TOKEN_ID)
-        ->call('deleteToken');
-
-    try {
-        expect(ZerotierToken::find(SecurityTestSeeder::BETA_TOKEN_ID))->not->toBeNull(
-            'Beta token was deleted by admin team user'
-        );
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: deleteToken() does not verify team ownership — cross-team token deletion is possible');
-    }
+    expect($hidden)->toContain('token');
+    expect($hidden)->toContain('host');
+    expect($hidden)->toContain('node_address');
 });

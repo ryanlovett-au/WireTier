@@ -10,15 +10,12 @@ return new class extends Migration
     {
         Schema::create('zerotier_tokens', function (Blueprint $table) {
             $table->uuid('id')->primary();
-            $table->foreignUuid('team_id');
             $table->string('name');
             $table->text('token');
             $table->string('host')->default('http://localhost:9993');
             $table->boolean('is_active')->default(true);
             $table->string('node_address')->nullable();
             $table->timestamps();
-
-            $table->index('team_id');
         });
 
         Schema::create('zerotier_networks', function (Blueprint $table) {

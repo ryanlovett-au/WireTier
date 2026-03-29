@@ -66,9 +66,8 @@ test('updatedSelectedToken reloads data', function () {
     peersHttpFakes();
     $this->actingAs($this->superAdmin);
 
-    // Create a second admin-team token
+    // Create a second global token
     $token2 = new ZerotierToken;
-    $token2->team_id = SecurityTestSeeder::ADMIN_TEAM_ID;
     $token2->name = 'Admin Token 2';
     $token2->token = 'admintoken2';
     $token2->host = 'http://localhost:9994';
@@ -83,22 +82,5 @@ test('updatedSelectedToken reloads data', function () {
     expect($peers)->toHaveCount(2); // Fakes return same data for both tokens
 });
 
-// ─── Security: Team Isolation ────────────────────────────────────────────
-
-test('peers page only loads tokens from current team', function () {
-    peersHttpFakes();
-    $this->actingAs($this->superAdmin);
-
-    $component = Livewire::test('pages::zerotier.peers');
-    $tokens = $component->get('tokens');
-
-    try {
-        foreach ($tokens as $token) {
-            expect($token->team_id)->toBe(SecurityTestSeeder::ADMIN_TEAM_ID,
-                "Peers page loaded token '{$token->name}' from team {$token->team_id}"
-            );
-        }
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: Peers page does not scope token loading to current team — tokens from other teams are visible');
-    }
-});
+// Tokens are global (admin-managed) — no team isolation test needed for tokens.
+// Peers page is admin-only, so all tokens should be visible.

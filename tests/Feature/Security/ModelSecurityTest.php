@@ -84,7 +84,7 @@ test('ZerotierToken model has explicit fillable or restrictive guarded', functio
             'ZerotierToken model uses $guarded = [] with no $fillable'
         );
     } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: ZerotierToken model uses $guarded = [] — token and team_id can be mass-assigned');
+        $this->markTestSkipped('SECURITY EXPOSURE: ZerotierToken model uses $guarded = [] — token and host can be mass-assigned');
     }
 });
 
@@ -128,11 +128,13 @@ test('User model hides sensitive fields from serialization', function () {
 
 // ─── ZerotierToken Security ──────────────────────────────────────────────
 
-test('ZerotierToken hides token from serialization', function () {
+test('ZerotierToken hides sensitive fields from serialization', function () {
     $token = new ZerotierToken;
     $hidden = $token->getHidden();
 
     expect($hidden)->toContain('token');
+    expect($hidden)->toContain('host');
+    expect($hidden)->toContain('node_address');
 });
 
 test('ZerotierToken encrypts token in database', function () {

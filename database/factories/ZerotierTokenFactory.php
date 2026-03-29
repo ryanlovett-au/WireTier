@@ -2,7 +2,6 @@
 
 namespace Database\Factories;
 
-use App\Models\Team;
 use App\Models\ZerotierToken;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -14,7 +13,6 @@ class ZerotierTokenFactory extends Factory
     public function definition(): array
     {
         return [
-            'team_id' => Team::factory(),
             'name' => fake()->words(2, true).' Controller',
             'token' => fake()->sha256(),
             'host' => 'http://localhost:9993',

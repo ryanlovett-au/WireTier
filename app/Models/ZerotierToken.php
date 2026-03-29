@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
@@ -18,7 +17,7 @@ class ZerotierToken extends Model
 
     protected $guarded = [];
 
-    protected $hidden = ['token'];
+    protected $hidden = ['token', 'host', 'node_address'];
 
     protected static function booted(): void
     {
@@ -33,11 +32,6 @@ class ZerotierToken extends Model
             'token' => 'encrypted',
             'is_active' => 'boolean',
         ];
-    }
-
-    public function team(): BelongsTo
-    {
-        return $this->belongsTo(Team::class);
     }
 
     public function networks(): HasMany

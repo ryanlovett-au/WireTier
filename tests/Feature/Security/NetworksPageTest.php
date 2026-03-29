@@ -29,7 +29,7 @@ beforeEach(function () {
 
 // ─── Functional Tests ────────────────────────────────────────────────────
 
-test('networks page mounts and loads team-scoped tokens', function () {
+test('networks page mounts and shows all active tokens by name', function () {
     defaultHttpFakes();
     $this->actingAs($this->alphaAdmin);
     session()->forget('current_team');
@@ -38,8 +38,24 @@ test('networks page mounts and loads team-scoped tokens', function () {
     $component->assertStatus(200);
 
     $tokens = $component->get('tokens');
+    // Both Alpha and Beta controllers should be visible (tokens are global)
+    expect($tokens->count())->toBeGreaterThanOrEqual(2);
+});
+
+test('non-admin team cannot see token host or node_address', function () {
+    defaultHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    $component = Livewire::test('pages::zerotier.networks');
+    $tokens = $component->get('tokens');
+
+    // Tokens loaded with select('id', 'name') should not have sensitive fields
     foreach ($tokens as $token) {
-        expect($token->team_id)->toBe(SecurityTestSeeder::ALPHA_TEAM_ID);
+        $array = $token->toArray();
+        expect($array)->not->toHaveKey('host');
+        expect($array)->not->toHaveKey('token');
+        expect($array)->not->toHaveKey('node_address');
     }
 });
 
@@ -282,25 +298,7 @@ test('viewer cannot delete networks', function () {
     }
 });
 
-// ─── Security: Team Isolation ────────────────────────────────────────────
-
-test('loadNetworks rejects a selectedToken from another team', function () {
-    defaultHttpFakes();
-    $this->actingAs($this->alphaAdmin);
-    session()->forget('current_team');
-
-    $component = Livewire::test('pages::zerotier.networks')
-        ->set('selectedToken', SecurityTestSeeder::BETA_TOKEN_ID)
-        ->call('loadNetworks');
-
-    try {
-        expect($component->get('networks'))->toBeEmpty(
-            'Networks were loaded using another team\'s token'
-        );
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: loadNetworks() does not verify team ownership of selectedToken — cross-team token usage is possible');
-    }
-});
+// ─── Security: Network Team Isolation ─────────────────────────────────────
 
 test('saveNetwork scopes DB update by team_id', function () {
     $this->actingAs($this->alphaAdmin);
@@ -347,36 +345,5 @@ test('deleteNetwork scopes DB delete by team_id', function () {
         );
     } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: deleteNetwork() does not scope ZerotierNetwork deletes by team_id — cross-team network deletion is possible');
-    }
-});
-
-test('createNetwork rejects a cross-team selectedToken', function () {
-    $this->actingAs($this->alphaAdmin);
-    session()->forget('current_team');
-
-    Http::fake([
-        '*/status' => Http::response(['address' => 'bbbb000001', 'version' => '1.14.0', 'online' => true]),
-        '*/controller/network/bbbb000001______' => Http::response([
-            'nwid' => 'bbbb000001ffffff',
-            'name' => 'Stolen',
-        ]),
-        '*/controller/network' => Http::response([]),
-        '*' => Http::response([]),
-    ]);
-
-    $countBefore = ZerotierNetwork::count();
-
-    Livewire::test('pages::zerotier.networks')
-        ->set('selectedToken', SecurityTestSeeder::BETA_TOKEN_ID)
-        ->set('new_network_name', 'Stolen Network')
-        ->set('new_network_subnet', '10.99.0.0/24')
-        ->call('createNetwork');
-
-    try {
-        expect(ZerotierNetwork::count())->toBe($countBefore,
-            'A network was created using another team\'s token'
-        );
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: createNetwork() does not verify team ownership of selectedToken — network creation with cross-team tokens is possible');
     }
 });

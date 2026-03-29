@@ -94,10 +94,9 @@ class SecurityTestSeeder extends Seeder
             TeamPermission::create(['team_id' => self::ALPHA_TEAM_ID, 'permission' => $perm]);
         }
 
-        // Alpha ZeroTier token (needs deterministic ID — use raw insert)
+        // ZeroTier tokens are global (admin-managed, no team_id)
         DB::table('zerotier_tokens')->insert([
             'id' => self::ALPHA_TOKEN_ID,
-            'team_id' => self::ALPHA_TEAM_ID,
             'name' => 'Alpha Controller',
             'token' => encrypt('fake-alpha-token-for-security-testing'),
             'host' => 'http://localhost:9993',
@@ -145,10 +144,8 @@ class SecurityTestSeeder extends Seeder
             TeamPermission::create(['team_id' => self::BETA_TEAM_ID, 'permission' => $perm]);
         }
 
-        // Beta ZeroTier token (needs deterministic ID — use raw insert)
         DB::table('zerotier_tokens')->insert([
             'id' => self::BETA_TOKEN_ID,
-            'team_id' => self::BETA_TEAM_ID,
             'name' => 'Beta Controller',
             'token' => encrypt('fake-beta-token-for-security-testing'),
             'host' => 'http://localhost:9994',

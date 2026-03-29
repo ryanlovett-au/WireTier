@@ -25,7 +25,7 @@ class Security_Audit extends Command
 
         $this->scan_unscoped_find_or_fail();
         $this->scan_unscoped_network_queries();
-        $this->scan_global_token_loading();
+
         $this->scan_missing_authorization();
         $this->scan_mass_assignment();
         $this->scan_xss_unescaped_output();
@@ -67,18 +67,19 @@ class Security_Audit extends Command
             $content = File::get($file);
             $methods = $this->extract_methods($content);
 
+            // ZerotierTokens are global (admin-managed) — no team_id scoping needed.
+            // Only check ZerotierNetwork findOrFail for missing team scope.
             foreach ($methods as $method => $body) {
-                if (str_contains($body, 'ZerotierToken::findOrFail')) {
-                    // Check if there's a team_id scope in the same method
+                if (str_contains($body, 'ZerotierNetwork::findOrFail') || str_contains($body, 'ZerotierNetwork::find(')) {
                     if (! str_contains($body, 'team_id') && ! str_contains($body, '->team->') && $method !== 'mount') {
-                        $line = $this->find_line($content, 'ZerotierToken::findOrFail');
+                        $line = $this->find_line($content, 'ZerotierNetwork::find');
                         $this->findings[] = AuditReport::finding(
                             'critical',
                             'Team Isolation',
                             $file,
                             $line,
-                            "ZerotierToken::findOrFail() in {$method}() has no team_id scope — any authenticated user can access any token",
-                            "Add ->where('team_id', auth()->user()->team->id) or verify token belongs to current team before use"
+                            "ZerotierNetwork::find() in {$method}() has no team_id scope — any authenticated user can access any network",
+                            "Add ->where('team_id', auth()->user()->team->id) or verify network belongs to current team before use"
                         );
                     }
                 }
@@ -119,48 +120,8 @@ class Security_Audit extends Command
         }
     }
 
-    // ─── Scan: Global token loading ──────────────────────────────────
-
-    private function scan_global_token_loading(): void
-    {
-        $files = $this->get_zerotier_blade_files();
-
-        foreach ($files as $file) {
-            $content = File::get($file);
-
-            // ZerotierToken::all() — loads every token in the system
-            if (preg_match('/ZerotierToken::all\(\)/', $content)) {
-                $line = $this->find_line($content, 'ZerotierToken::all()');
-                $this->findings[] = AuditReport::finding(
-                    'critical',
-                    'Team Isolation',
-                    $file,
-                    $line,
-                    'ZerotierToken::all() loads all tokens system-wide instead of team-scoped',
-                    "Replace with ZerotierToken::where('team_id', auth()->user()->team->id)->get()"
-                );
-            }
-
-            // ZerotierToken::where('is_active', true)->get() without team scope
-            if (preg_match('/ZerotierToken::where\([\'"]is_active[\'"]/', $content)) {
-                $context_start = strpos($content, "ZerotierToken::where('is_active'") ?: strpos($content, 'ZerotierToken::where("is_active"');
-                if ($context_start !== false) {
-                    $context = substr($content, $context_start, 150);
-                    if (! str_contains($context, 'team_id')) {
-                        $line = substr_count(substr($content, 0, $context_start), "\n") + 1;
-                        $this->findings[] = AuditReport::finding(
-                            'critical',
-                            'Team Isolation',
-                            $file,
-                            $line,
-                            'ZerotierToken query filters by is_active but not team_id — loads tokens from all teams',
-                            "Add ->where('team_id', auth()->user()->team->id) to scope tokens"
-                        );
-                    }
-                }
-            }
-        }
-    }
+    // Note: scan_global_token_loading removed — ZerotierTokens are intentionally
+    // global (admin-managed). All teams share the same controller tokens.
 
     // ─── Scan: Missing authorization on public Livewire methods ──────
 

@@ -186,27 +186,18 @@ test('addIpAssignment and removeIpAssignment manage IP arrays', function () {
     expect($component->get('edit_ip_assignments'))->not->toContain('10.0.0.99');
 });
 
-// ─── Security: Team Isolation ────────────────────────────────────────────
+// ─── Security: Network Team Isolation ─────────────────────────────────────
 
-test('members page mount rejects a token belonging to another team', function () {
+test('members page mount rejects a network not owned by the team', function () {
     membersHttpFakes();
     $this->actingAs($this->alphaAdmin);
     session()->forget('current_team');
 
-    try {
-        $component = Livewire::test('pages::zerotier.members', [
-            'networkId' => SecurityTestSeeder::BETA_NETWORK_ID,
-            'tokenId' => SecurityTestSeeder::BETA_TOKEN_ID,
-        ]);
-
-        // If we reach here, the component mounted with a cross-team token (vulnerability)
-        $this->fail('Members page allowed access with another team\'s token');
-    } catch (Throwable $e) {
-        if (str_contains($e->getMessage(), 'SECURITY EXPOSURE') || str_contains($e->getMessage(), 'allowed access')) {
-            $this->markTestSkipped('SECURITY EXPOSURE: Members page mount() does not verify team ownership of tokenId — cross-team access is possible');
-        }
-        // Any other exception (403, authorization) means the test passes
-    }
+    // Alpha admin tries to access Beta's network — should get 403
+    Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::BETA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::BETA_TOKEN_ID,
+    ])->assertStatus(403);
 });
 
 // ─── Security: Authorization ─────────────────────────────────────────────

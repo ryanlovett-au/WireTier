@@ -1,14 +1,19 @@
 <?php
 
-use Livewire\Attributes\Title;
-use Livewire\Component;
+use App\Models\ZerotierNetwork;
 use App\Models\ZerotierToken;
 use App\Services\ZerotierService;
+use Livewire\Attributes\Title;
+use Livewire\Component;
 
-new #[Title('Network Members')] class extends Component {
+new #[Title('Network Members')] class extends Component
+{
     public string $networkId;
+
     public string $tokenId;
+
     public array $network = [];
+
     public array $members = [];
 
     // Delete confirmation
@@ -16,17 +21,32 @@ new #[Title('Network Members')] class extends Component {
 
     // Edit member
     public string $edit_member_id = '';
+
     public string $edit_member_name = '';
-    public array  $edit_ip_assignments = [];
-    public bool   $edit_active_bridge = false;
-    public bool   $edit_no_auto_assign = false;
+
+    public array $edit_ip_assignments = [];
+
+    public bool $edit_active_bridge = false;
+
+    public bool $edit_no_auto_assign = false;
+
     public string $new_ip = '';
 
     public function mount(string $networkId, string $tokenId)
     {
         if (! auth()->user()->team) {
             $this->redirect('/settings/teams');
+
             return;
+        }
+
+        // Verify the user's team owns this network
+        $ownsNetwork = ZerotierNetwork::where('network_id', $networkId)
+            ->where('team_id', auth()->user()->team->id)
+            ->exists();
+
+        if (! $ownsNetwork && ! auth()->user()->isAdmin()) {
+            abort(403);
         }
 
         $this->networkId = $networkId;
@@ -38,6 +58,7 @@ new #[Title('Network Members')] class extends Component {
     protected function getService(): ZerotierService
     {
         $token = ZerotierToken::findOrFail($this->tokenId);
+
         return new ZerotierService($token);
     }
 
@@ -45,7 +66,7 @@ new #[Title('Network Members')] class extends Component {
     {
         try {
             $this->network = $this->getService()->getControllerNetwork($this->networkId);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load network: '.$e->getMessage());
         }
     }
@@ -64,7 +85,7 @@ new #[Title('Network Members')] class extends Component {
             // Index peers by address for cross-referencing online status
             try {
                 $peers = collect($service->getPeers())->keyBy('address');
-            } catch (\Exception) {
+            } catch (Exception) {
                 $peers = collect();
             }
 
@@ -74,27 +95,27 @@ new #[Title('Network Members')] class extends Component {
 
                     // The local controller node is always online (it never appears in the peer list)
                     if ($nodeId === $controllerAddress) {
-                        $member['_online']       = true;
-                        $member['_latency']      = 0;
+                        $member['_online'] = true;
+                        $member['_latency'] = 0;
                         $member['_physicalAddr'] = null;
-                    // Enrich with live peer data if available
+                        // Enrich with live peer data if available
                     } elseif ($peer = $peers->get($nodeId)) {
                         $activePaths = collect($peer['paths'] ?? [])->where('active', true);
-                        $member['_online']       = $activePaths->isNotEmpty();
-                        $member['_latency']      = $peer['latency'] ?? -1;
+                        $member['_online'] = $activePaths->isNotEmpty();
+                        $member['_latency'] = $peer['latency'] ?? -1;
                         $member['_physicalAddr'] = $activePaths->first()['address'] ?? ($peer['physicalAddress'] ?? null);
                     } else {
-                        $member['_online']       = false;
-                        $member['_latency']      = $member['latency'] ?? -1;
+                        $member['_online'] = false;
+                        $member['_latency'] = $member['latency'] ?? -1;
                         $member['_physicalAddr'] = $member['physicalAddr'] ?? null;
                     }
 
                     $this->members[] = $member;
-                } catch (\Exception $e) {
+                } catch (Exception $e) {
                     // Skip members that error
                 }
             }
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load members: '.$e->getMessage());
         }
     }
@@ -105,7 +126,7 @@ new #[Title('Network Members')] class extends Component {
             $this->getService()->authorizeMember($this->networkId, $nodeId);
             Flux::toast(variant: 'success', heading: 'Authorized', text: 'Member '.$nodeId.' has been authorized.');
             $this->loadMembers();
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Flux::toast(variant: 'danger', heading: 'Error', text: $e->getMessage());
         }
     }
@@ -116,7 +137,7 @@ new #[Title('Network Members')] class extends Component {
             $this->getService()->deauthorizeMember($this->networkId, $nodeId);
             Flux::toast(variant: 'warning', heading: 'Deauthorized', text: 'Member '.$nodeId.' has been deauthorized.');
             $this->loadMembers();
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Flux::toast(variant: 'danger', heading: 'Error', text: $e->getMessage());
         }
     }
@@ -135,7 +156,7 @@ new #[Title('Network Members')] class extends Component {
             Flux::toast(variant: 'success', heading: 'Deleted', text: 'Member has been removed.');
             $this->delete_member_id = '';
             $this->loadMembers();
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Flux::toast(variant: 'danger', heading: 'Error', text: $e->getMessage());
         }
     }
@@ -144,14 +165,14 @@ new #[Title('Network Members')] class extends Component {
     {
         try {
             $member = $this->getService()->getNetworkMember($this->networkId, $nodeId);
-            $this->edit_member_id       = $nodeId;
-            $this->edit_member_name     = $member['name'] ?? '';
-            $this->edit_ip_assignments  = $member['ipAssignments'] ?? [];
-            $this->edit_active_bridge   = $member['activeBridge'] ?? false;
-            $this->edit_no_auto_assign  = $member['noAutoAssignIps'] ?? false;
+            $this->edit_member_id = $nodeId;
+            $this->edit_member_name = $member['name'] ?? '';
+            $this->edit_ip_assignments = $member['ipAssignments'] ?? [];
+            $this->edit_active_bridge = $member['activeBridge'] ?? false;
+            $this->edit_no_auto_assign = $member['noAutoAssignIps'] ?? false;
             $this->new_ip = '';
             Flux::modal('editMemberModal')->show();
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Flux::toast(variant: 'danger', heading: 'Error', text: $e->getMessage());
         }
     }
@@ -174,14 +195,14 @@ new #[Title('Network Members')] class extends Component {
     {
         try {
             $this->getService()->updateNetworkMember($this->networkId, $this->edit_member_id, [
-                'ipAssignments'   => $this->edit_ip_assignments,
-                'activeBridge'    => $this->edit_active_bridge,
+                'ipAssignments' => $this->edit_ip_assignments,
+                'activeBridge' => $this->edit_active_bridge,
                 'noAutoAssignIps' => $this->edit_no_auto_assign,
             ]);
             Flux::modal('editMemberModal')->close();
             Flux::toast(variant: 'success', heading: 'Updated', text: 'Member settings have been updated.');
             $this->loadMembers();
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Flux::toast(variant: 'danger', heading: 'Error', text: $e->getMessage());
         }
     }
