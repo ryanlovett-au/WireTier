@@ -134,75 +134,35 @@ test('rejects non-HTTP schemes as host URL', function () {
 
     $token = ZerotierToken::find(SecurityTestSeeder::ALPHA_TOKEN_ID);
 
-    try {
-        foreach ($dangerousSchemes as $host) {
-            $token->host = $host;
-            $service = new ZerotierService($token);
-
-            $reflection = new ReflectionClass($service);
-            $prop = $reflection->getProperty('baseUrl');
-            $prop->setAccessible(true);
-            $baseUrl = $prop->getValue($service);
-
-            $scheme = parse_url($baseUrl, PHP_URL_SCHEME);
-            expect($scheme)->toBeIn(['http', 'https'], "Non-HTTP scheme '{$scheme}' was accepted from: {$host}");
-        }
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: ZerotierService accepts non-HTTP schemes (file://, ftp://, gopher://) — protocol smuggling is possible');
+    foreach ($dangerousSchemes as $host) {
+        $token->host = $host;
+        expect(fn () => new ZerotierService($token))
+            ->toThrow(InvalidArgumentException::class);
     }
 });
 
 // ─── Security: Path Injection ────────────────────────────────────────────
 
 test('networkId with path traversal chars is rejected', function () {
-    Http::fake(['*' => Http::response([])]);
-
     $token = ZerotierToken::find(SecurityTestSeeder::ALPHA_TOKEN_ID);
     $service = new ZerotierService($token);
 
     $maliciousIds = [
         '../../../etc/passwd',
-        'aabbccdd11%2F..%2F..%2Fetc%2Fpasswd',
+        'aabbccdd11%2F..%2Fetc',
         'aabbccdd11;rm -rf /',
     ];
 
-    try {
-        foreach ($maliciousIds as $networkId) {
-            // The service should validate networkId format before using in URL
-            $service->getControllerNetwork($networkId);
-
-            // Check that the actual URL sent doesn't contain path traversal
-            Http::assertSent(function ($request) {
-                $path = parse_url($request->url(), PHP_URL_PATH);
-
-                return ! str_contains($path, '..') && ! str_contains($path, ';');
-            });
-        }
-    } catch (Throwable $e) {
-        if (str_contains($e->getMessage(), 'SECURITY EXPOSURE')) {
-            throw $e;
-        }
-        $this->markTestSkipped('SECURITY EXPOSURE: ZerotierService does not validate networkId — path traversal/injection in API URLs is possible');
+    foreach ($maliciousIds as $networkId) {
+        expect(fn () => $service->getControllerNetwork($networkId))
+            ->toThrow(InvalidArgumentException::class);
     }
 });
 
-test('empty token falls back to localhost', function () {
+test('empty token throws instead of falling back to localhost', function () {
     $token = ZerotierToken::find(SecurityTestSeeder::ALPHA_TOKEN_ID);
-    // Simulate empty token (the encrypted value decrypts to empty string)
     $token->token = '';
 
-    $service = new ZerotierService($token);
-
-    $reflection = new ReflectionClass($service);
-    $prop = $reflection->getProperty('baseUrl');
-    $prop->setAccessible(true);
-
-    try {
-        // An empty token should not default to localhost — it should fail
-        expect($prop->getValue($service))->not->toBe('http://localhost:9993',
-            'Empty token silently falls back to localhost — misconfigured tokens can access local controller'
-        );
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: Empty token silently falls back to http://localhost:9993 — misconfigured tokens may access local ZeroTier controller');
-    }
+    expect(fn () => new ZerotierService($token))
+        ->toThrow(InvalidArgumentException::class, 'no API token configured');
 });

@@ -14,8 +14,26 @@ class ZerotierService
 
     public function __construct(protected ZerotierToken $zerotierToken)
     {
-        $this->baseUrl = rtrim($zerotierToken->token ? $zerotierToken->host : 'http://localhost:9993', '/');
+        if (empty($zerotierToken->token)) {
+            throw new \InvalidArgumentException('ZerotierToken has no API token configured');
+        }
+
+        $host = $zerotierToken->host;
+        $scheme = parse_url($host, PHP_URL_SCHEME);
+
+        if (! in_array($scheme, ['http', 'https'])) {
+            throw new \InvalidArgumentException("Invalid host scheme: {$scheme}");
+        }
+
+        $this->baseUrl = rtrim($host, '/');
         $this->token = $zerotierToken->token;
+    }
+
+    protected static function validatePathSegment(string $value, string $label): void
+    {
+        if (! preg_match('/^[a-zA-Z0-9_-]+$/', $value)) {
+            throw new \InvalidArgumentException("Invalid {$label}: contains unsafe characters");
+        }
     }
 
     protected function client()
@@ -56,6 +74,7 @@ class ZerotierService
 
     public function getControllerNetwork(string $networkId): array
     {
+        self::validatePathSegment($networkId, 'networkId');
         $response = $this->client()->get("/controller/network/{$networkId}");
 
         return $response->json();
@@ -70,6 +89,7 @@ class ZerotierService
             throw new \RuntimeException('Could not determine controller node address');
         }
 
+        self::validatePathSegment($nodeAddress, 'nodeAddress');
         $response = $this->client()->post("/controller/network/{$nodeAddress}______", $config ?? []);
 
         return $response->json();
@@ -77,6 +97,7 @@ class ZerotierService
 
     public function updateNetwork(string $networkId, array $config): array
     {
+        self::validatePathSegment($networkId, 'networkId');
         $response = $this->client()->post("/controller/network/{$networkId}", $config);
 
         return $response->json();
@@ -84,6 +105,7 @@ class ZerotierService
 
     public function deleteNetwork(string $networkId): bool
     {
+        self::validatePathSegment($networkId, 'networkId');
         $response = $this->client()->delete("/controller/network/{$networkId}");
 
         return $response->successful();
@@ -93,6 +115,7 @@ class ZerotierService
 
     public function getNetworkMembers(string $networkId): array
     {
+        self::validatePathSegment($networkId, 'networkId');
         $response = $this->client()->get("/controller/network/{$networkId}/member");
 
         return $response->json() ?? [];
@@ -100,6 +123,8 @@ class ZerotierService
 
     public function getNetworkMember(string $networkId, string $nodeId): array
     {
+        self::validatePathSegment($networkId, 'networkId');
+        self::validatePathSegment($nodeId, 'nodeId');
         $response = $this->client()->get("/controller/network/{$networkId}/member/{$nodeId}");
 
         return $response->json();
@@ -107,6 +132,8 @@ class ZerotierService
 
     public function updateNetworkMember(string $networkId, string $nodeId, array $config): array
     {
+        self::validatePathSegment($networkId, 'networkId');
+        self::validatePathSegment($nodeId, 'nodeId');
         $response = $this->client()->post("/controller/network/{$networkId}/member/{$nodeId}", $config);
 
         return $response->json();
@@ -124,6 +151,8 @@ class ZerotierService
 
     public function deleteMember(string $networkId, string $nodeId): bool
     {
+        self::validatePathSegment($networkId, 'networkId');
+        self::validatePathSegment($nodeId, 'nodeId');
         $response = $this->client()->delete("/controller/network/{$networkId}/member/{$nodeId}");
 
         return $response->successful();
@@ -140,6 +169,7 @@ class ZerotierService
 
     public function getPeer(string $address): array
     {
+        self::validatePathSegment($address, 'address');
         $response = $this->client()->get("/peer/{$address}");
 
         return $response->json();
@@ -156,6 +186,7 @@ class ZerotierService
 
     public function joinNetwork(string $networkId): array
     {
+        self::validatePathSegment($networkId, 'networkId');
         $response = $this->client()->post("/network/{$networkId}", []);
 
         return $response->json();
@@ -163,6 +194,7 @@ class ZerotierService
 
     public function leaveNetwork(string $networkId): bool
     {
+        self::validatePathSegment($networkId, 'networkId');
         $response = $this->client()->delete("/network/{$networkId}");
 
         return $response->successful();
