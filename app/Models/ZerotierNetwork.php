@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 class ZerotierNetwork extends Model
@@ -15,7 +16,7 @@ class ZerotierNetwork extends Model
 
     public $incrementing = false;
 
-    protected $fillable = ['team_id', 'zerotier_token_id', 'network_id', 'name', 'description', 'private', 'config'];
+    protected $fillable = ['team_id', 'zerotier_token_id', 'network_id', 'name', 'description', 'private', 'config', 'synced_at'];
 
     protected static function booted(): void
     {
@@ -29,7 +30,13 @@ class ZerotierNetwork extends Model
         return [
             'private' => 'boolean',
             'config' => 'array',
+            'synced_at' => 'datetime',
         ];
+    }
+
+    public function members(): HasMany
+    {
+        return $this->hasMany(ZerotierMember::class);
     }
 
     public function team(): BelongsTo
