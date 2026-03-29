@@ -29,6 +29,9 @@ Route::middleware(['auth', 'verified', 'throttle:60,1'])->group(function () {
     Route::livewire('settings/teams', 'pages::settings.teams')->name('teams.index');
     Route::livewire('settings/team/{id?}', 'pages::settings.team')->name('teams.show');
 
+    // Audit log
+    Route::livewire('settings/audit-log', 'pages::settings.audit-log')->name('audit-log.index');
+
     // Team switcher
     Route::post('teams/{id}/switch', function (string $id) {
         $user = auth()->user();
