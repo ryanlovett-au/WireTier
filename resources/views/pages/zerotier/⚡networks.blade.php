@@ -1,39 +1,70 @@
 <?php
 
+use App\Models\Team;
+use App\Models\ZerotierNetwork;
+use App\Models\ZerotierToken;
+use App\Services\ZerotierService;
 use Livewire\Attributes\Title;
 use Livewire\Component;
-use App\Models\ZerotierToken;
-use App\Models\ZerotierNetwork;
-use App\Services\ZerotierService;
 
-new #[Title('ZeroTier Networks')] class extends Component {
+new #[Title('ZeroTier Networks')] class extends Component
+{
     public $tokens;
+
     public array $networks = [];
+
     public string $selectedToken = '';
 
     // Delete confirmation
     public string $delete_network_id = '';
+
     public string $delete_network_name = '';
 
     // Edit network modal
-    public string $editing_network_id   = '';
-    public string $edit_tab             = 'settings';
-    public string $edit_name            = '';
-    public bool   $edit_private         = true;
-    public bool   $edit_broadcast       = true;
-    public int    $edit_multicast_limit = 32;
-    public array  $edit_routes          = [];
-    public array  $edit_ip_pools        = [];
-    public string $new_route_target     = '';
-    public string $new_route_via        = '';
-    public string $new_pool_start       = '';
-    public string $new_pool_end         = '';
+    public string $editing_network_id = '';
+
+    public string $edit_tab = 'settings';
+
+    public string $edit_name = '';
+
+    public bool $edit_private = true;
+
+    public bool $edit_broadcast = true;
+
+    public int $edit_multicast_limit = 32;
+
+    public array $edit_routes = [];
+
+    public array $edit_ip_pools = [];
+
+    public string $new_route_target = '';
+
+    public string $new_route_via = '';
+
+    public string $new_pool_start = '';
+
+    public string $new_pool_end = '';
 
     // Create network form
     public string $new_network_name = '';
+
     public bool $new_network_private = true;
+
     public string $new_network_subnet = '';
+
     public array $subnet_suggestions = [];
+
+    // Import (admin-only)
+    public array $untracked_networks = [];
+
+    public array $teams = [];
+
+    public array $import_team_selections = [];
+
+    // Delete untracked network
+    public string $delete_untracked_id = '';
+
+    public string $delete_untracked_name = '';
 
     public function generateSubnetSuggestions(): void
     {
@@ -45,17 +76,17 @@ new #[Title('ZeroTier Networks')] class extends Component {
             if (count($suggestions) % 2 === 0) {
                 // 10.x.x.0/24 — avoid .0.x and .1.x (too common)
                 $second = rand(2, 254);
-                $third  = rand(0, 254);
+                $third = rand(0, 254);
                 $subnet = "10.{$second}.{$third}.0/24";
             } else {
                 // 172.16.x.0/24 through 172.31.x.0/24
                 $second = rand(16, 31);
-                $third  = rand(0, 254);
+                $third = rand(0, 254);
                 $subnet = "172.{$second}.{$third}.0/24";
             }
 
             if (! in_array($subnet, $used)) {
-                $used[]        = $subnet;
+                $used[] = $subnet;
                 $suggestions[] = $subnet;
             }
         }
@@ -70,18 +101,23 @@ new #[Title('ZeroTier Networks')] class extends Component {
     {
         if (! auth()->user()->team) {
             $this->redirect('/settings/teams');
+
             return;
         }
 
         $this->generateSubnetSuggestions();
 
-        $this->tokens = ZerotierToken::where('team_id', auth()->user()->team->id)
-            ->where('is_active', true)
+        $this->tokens = ZerotierToken::where('is_active', true)
+            ->select('id', 'name')
             ->get();
 
         if ($this->tokens->count() > 0) {
             $this->selectedToken = $this->tokens->first()->id;
             $this->loadNetworks();
+
+            if (auth()->user()->isAdmin()) {
+                $this->discoverNetworks();
+            }
         }
     }
 
@@ -91,45 +127,210 @@ new #[Title('ZeroTier Networks')] class extends Component {
             return;
         }
 
+        // DB-first: only show networks this team owns for the selected controller
+        $dbNetworks = ZerotierNetwork::where('team_id', auth()->user()->team->id)
+            ->where('zerotier_token_id', $this->selectedToken)
+            ->get();
+
         $token = ZerotierToken::findOrFail($this->selectedToken);
         $service = new ZerotierService($token);
 
-        try {
-            $networkIds = $service->getControllerNetworks();
-            $this->networks = [];
+        $this->networks = [];
 
-            foreach ($networkIds as $networkId) {
-                try {
-                    $network = $service->getControllerNetwork($networkId);
-                    $memberIds = array_keys($service->getNetworkMembers($networkId));
-                    $authorized = 0;
-                    $pending    = 0;
-                    foreach ($memberIds as $nodeId) {
-                        try {
-                            $m = $service->getNetworkMember($networkId, $nodeId);
-                            ($m['authorized'] ?? false) ? $authorized++ : $pending++;
-                        } catch (\Exception) {}
-                    }
-                    $network['_member_count']  = $authorized;
-                    $network['_pending_count'] = $pending;
-                    $this->networks[] = $network;
-                } catch (\Exception $e) {
-                    // Skip networks that error
+        foreach ($dbNetworks as $dbNetwork) {
+            $offline = [
+                'id' => $dbNetwork->network_id,
+                'nwid' => $dbNetwork->network_id,
+                'name' => $dbNetwork->name ?? 'Unknown',
+                'private' => $dbNetwork->private,
+                'routes' => [],
+                '_member_count' => 0,
+                '_pending_count' => 0,
+                '_offline' => true,
+            ];
+
+            try {
+                $network = $service->getControllerNetwork($dbNetwork->network_id);
+
+                // If API returned empty/invalid data, use offline fallback
+                if (empty($network) || ! isset($network['nwid'])) {
+                    $this->networks[] = $offline;
+
+                    continue;
                 }
+
+                $memberIds = array_keys($service->getNetworkMembers($dbNetwork->network_id));
+                $authorized = 0;
+                $pending = 0;
+                foreach ($memberIds as $nodeId) {
+                    try {
+                        $m = $service->getNetworkMember($dbNetwork->network_id, $nodeId);
+                        ($m['authorized'] ?? false) ? $authorized++ : $pending++;
+                    } catch (Exception) {
+                    }
+                }
+                $network['_member_count'] = $authorized;
+                $network['_pending_count'] = $pending;
+                $this->networks[] = $network;
+            } catch (Exception) {
+                $this->networks[] = $offline;
             }
-        } catch (\Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load networks: '.$e->getMessage());
         }
     }
 
     public function updatedSelectedToken(): void
     {
         $this->loadNetworks();
+
+        if (auth()->user()->isAdmin()) {
+            $this->discoverNetworks();
+        } else {
+            $this->untracked_networks = [];
+        }
+    }
+
+    // ─── Import (Admin Only) ──────────────────────────────────────────
+
+    public function discoverNetworks(): void
+    {
+        if (! auth()->user()->isAdmin()) {
+            return;
+        }
+
+        if (empty($this->selectedToken)) {
+            return;
+        }
+
+        $token = ZerotierToken::findOrFail($this->selectedToken);
+        $service = new ZerotierService($token);
+
+        try {
+            $allNetworkIds = $service->getControllerNetworks();
+            $trackedIds = ZerotierNetwork::where('zerotier_token_id', $this->selectedToken)
+                ->pluck('network_id')
+                ->toArray();
+
+            $this->untracked_networks = [];
+
+            foreach ($allNetworkIds as $networkId) {
+                if (in_array($networkId, $trackedIds)) {
+                    continue;
+                }
+
+                try {
+                    $network = $service->getControllerNetwork($networkId);
+                    $this->untracked_networks[] = [
+                        'nwid' => $networkId,
+                        'name' => $network['name'] ?? '',
+                        'private' => $network['private'] ?? true,
+                    ];
+                } catch (Exception) {
+                    $this->untracked_networks[] = [
+                        'nwid' => $networkId,
+                        'name' => '',
+                        'private' => true,
+                    ];
+                }
+            }
+
+            $this->teams = Team::all()->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])->toArray();
+
+            // Pre-select the first team for each untracked network
+            $defaultTeamId = ! empty($this->teams) ? $this->teams[0]['id'] : null;
+            $this->import_team_selections = [];
+            foreach ($this->untracked_networks as $net) {
+                $this->import_team_selections[$net['nwid']] = $defaultTeamId;
+            }
+
+            if (empty($this->untracked_networks)) {
+                Flux::toast(variant: 'success', heading: 'All Synced', text: 'All networks on this controller are already tracked.');
+            }
+        } catch (Exception $e) {
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to discover networks.');
+        }
+    }
+
+    public function importNetwork(string $networkId): void
+    {
+        if (! auth()->user()->isAdmin()) {
+            return;
+        }
+
+        $teamId = $this->import_team_selections[$networkId] ?? null;
+
+        if (! $teamId) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Please select a team for this network.');
+
+            return;
+        }
+
+        $token = ZerotierToken::findOrFail($this->selectedToken);
+        $service = new ZerotierService($token);
+
+        try {
+            $network = $service->getControllerNetwork($networkId);
+
+            ZerotierNetwork::create([
+                'team_id' => $teamId,
+                'zerotier_token_id' => $this->selectedToken,
+                'network_id' => $networkId,
+                'name' => $network['name'] ?? null,
+                'private' => $network['private'] ?? true,
+                'config' => $network,
+            ]);
+
+            $this->untracked_networks = array_values(
+                array_filter($this->untracked_networks, fn ($n) => $n['nwid'] !== $networkId)
+            );
+
+            Flux::toast(variant: 'success', heading: 'Imported', text: "Network {$networkId} has been assigned.");
+            $this->loadNetworks();
+        } catch (Exception $e) {
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to import network.');
+        }
+    }
+
+    public function confirmDeleteUntracked(string $networkId, string $networkName): void
+    {
+        if (! auth()->user()->isAdmin()) {
+            return;
+        }
+
+        $this->delete_untracked_id = $networkId;
+        $this->delete_untracked_name = $networkName ?: $networkId;
+        Flux::modal('deleteUntrackedModal')->show();
+    }
+
+    public function deleteUntrackedNetwork(): void
+    {
+        if (! auth()->user()->isAdmin()) {
+            return;
+        }
+
+        $token = ZerotierToken::findOrFail($this->selectedToken);
+        $service = new ZerotierService($token);
+
+        try {
+            $service->deleteNetwork($this->delete_untracked_id);
+            Flux::modal('deleteUntrackedModal')->close();
+            Flux::toast(variant: 'success', heading: 'Deleted', text: 'Untracked network has been removed from the controller.');
+
+            $this->untracked_networks = array_values(
+                array_filter($this->untracked_networks, fn ($n) => $n['nwid'] !== $this->delete_untracked_id)
+            );
+            $this->delete_untracked_id = '';
+            $this->delete_untracked_name = '';
+        } catch (Exception $e) {
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to delete network from controller.');
+        }
     }
 
     public function openCreateModal(): void
     {
-        $this->new_network_name   = '';
+        $this->new_network_name = '';
         $this->new_network_subnet = '';
         $this->generateSubnetSuggestions();
         Flux::modal('createNetworkModal')->show();
@@ -184,8 +385,9 @@ new #[Title('ZeroTier Networks')] class extends Component {
             Flux::modal('createNetworkModal')->close();
             $this->new_network_name = '';
             $this->loadNetworks();
-        } catch (\Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to create network: '.$e->getMessage());
+        } catch (Exception $e) {
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to create network. Please try again.');
         }
     }
 
@@ -193,28 +395,29 @@ new #[Title('ZeroTier Networks')] class extends Component {
 
     public function openEditModal(string $networkId): void
     {
-        $token   = ZerotierToken::findOrFail($this->selectedToken);
+        $token = ZerotierToken::findOrFail($this->selectedToken);
         $service = new ZerotierService($token);
 
         try {
             $network = $service->getControllerNetwork($networkId);
 
-            $this->editing_network_id   = $networkId;
-            $this->edit_tab             = 'settings';
-            $this->edit_name            = $network['name'] ?? '';
-            $this->edit_private         = $network['private'] ?? true;
-            $this->edit_broadcast       = $network['enableBroadcast'] ?? true;
+            $this->editing_network_id = $networkId;
+            $this->edit_tab = 'settings';
+            $this->edit_name = $network['name'] ?? '';
+            $this->edit_private = $network['private'] ?? true;
+            $this->edit_broadcast = $network['enableBroadcast'] ?? true;
             $this->edit_multicast_limit = $network['multicastLimit'] ?? 32;
-            $this->edit_routes          = array_values($network['routes'] ?? []);
-            $this->edit_ip_pools        = array_values($network['ipAssignmentPools'] ?? []);
-            $this->new_route_target     = '';
-            $this->new_route_via        = '';
-            $this->new_pool_start       = '';
-            $this->new_pool_end         = '';
+            $this->edit_routes = array_values($network['routes'] ?? []);
+            $this->edit_ip_pools = array_values($network['ipAssignmentPools'] ?? []);
+            $this->new_route_target = '';
+            $this->new_route_via = '';
+            $this->new_pool_start = '';
+            $this->new_pool_end = '';
 
             Flux::modal('editNetworkModal')->show();
-        } catch (\Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load network: '.$e->getMessage());
+        } catch (Exception $e) {
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load network. Please try again.');
         }
     }
 
@@ -224,13 +427,13 @@ new #[Title('ZeroTier Networks')] class extends Component {
 
         $this->edit_routes[] = [
             'target' => $this->new_route_target,
-            'via'    => $this->new_route_via ?: null,
-            'flags'  => 0,
+            'via' => $this->new_route_via ?: null,
+            'flags' => 0,
             'metric' => 0,
         ];
 
         $this->new_route_target = '';
-        $this->new_route_via    = '';
+        $this->new_route_via = '';
     }
 
     public function removeRoute(int $index): void
@@ -243,16 +446,16 @@ new #[Title('ZeroTier Networks')] class extends Component {
     {
         $this->validate([
             'new_pool_start' => 'required|ip',
-            'new_pool_end'   => 'required|ip',
+            'new_pool_end' => 'required|ip',
         ]);
 
         $this->edit_ip_pools[] = [
             'ipRangeStart' => $this->new_pool_start,
-            'ipRangeEnd'   => $this->new_pool_end,
+            'ipRangeEnd' => $this->new_pool_end,
         ];
 
         $this->new_pool_start = '';
-        $this->new_pool_end   = '';
+        $this->new_pool_end = '';
     }
 
     public function removeIpPool(int $index): void
@@ -269,31 +472,34 @@ new #[Title('ZeroTier Networks')] class extends Component {
 
         $this->validate(['edit_name' => 'required|string|max:255']);
 
-        $token   = ZerotierToken::findOrFail($this->selectedToken);
+        $token = ZerotierToken::findOrFail($this->selectedToken);
         $service = new ZerotierService($token);
 
         try {
             $service->updateNetwork($this->editing_network_id, [
-                'name'             => $this->edit_name,
-                'private'          => $this->edit_private,
-                'enableBroadcast'  => $this->edit_broadcast,
-                'multicastLimit'   => $this->edit_multicast_limit,
-                'routes'           => $this->edit_routes,
-                'ipAssignmentPools'=> $this->edit_ip_pools,
-                'v4AssignMode'     => ['zt' => count($this->edit_ip_pools) > 0],
+                'name' => $this->edit_name,
+                'private' => $this->edit_private,
+                'enableBroadcast' => $this->edit_broadcast,
+                'multicastLimit' => $this->edit_multicast_limit,
+                'routes' => $this->edit_routes,
+                'ipAssignmentPools' => $this->edit_ip_pools,
+                'v4AssignMode' => ['zt' => count($this->edit_ip_pools) > 0],
             ]);
 
-            // Sync local DB record if tracked
-            ZerotierNetwork::where('network_id', $this->editing_network_id)->update([
-                'name'    => $this->edit_name,
-                'private' => $this->edit_private,
-            ]);
+            // Sync local DB record if tracked (scoped to current team)
+            ZerotierNetwork::where('network_id', $this->editing_network_id)
+                ->where('team_id', auth()->user()->team->id)
+                ->update([
+                    'name' => $this->edit_name,
+                    'private' => $this->edit_private,
+                ]);
 
             Flux::toast(variant: 'success', heading: 'Saved', text: 'Network settings updated.');
             Flux::modal('editNetworkModal')->close();
             $this->loadNetworks();
-        } catch (\Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to save: '.$e->getMessage());
+        } catch (Exception $e) {
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to save network. Please try again.');
         }
     }
 
@@ -305,7 +511,7 @@ new #[Title('ZeroTier Networks')] class extends Component {
             return;
         }
 
-        $this->delete_network_id   = $networkId;
+        $this->delete_network_id = $networkId;
         $this->delete_network_name = $networkName ?: $networkId;
         Flux::modal('deleteNetworkModal')->show();
     }
@@ -321,14 +527,17 @@ new #[Title('ZeroTier Networks')] class extends Component {
 
         try {
             $service->deleteNetwork($this->delete_network_id);
-            ZerotierNetwork::where('network_id', $this->delete_network_id)->delete();
+            ZerotierNetwork::where('network_id', $this->delete_network_id)
+                ->where('team_id', auth()->user()->team->id)
+                ->delete();
             Flux::modal('deleteNetworkModal')->close();
             Flux::toast(variant: 'success', heading: 'Deleted', text: 'Network has been deleted.');
-            $this->delete_network_id   = '';
+            $this->delete_network_id = '';
             $this->delete_network_name = '';
             $this->loadNetworks();
-        } catch (\Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to delete network: '.$e->getMessage());
+        } catch (Exception $e) {
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to delete network. Please try again.');
         }
     }
 }; ?>
@@ -354,6 +563,54 @@ new #[Title('ZeroTier Networks')] class extends Component {
                 @endif
             </div>
         </div>
+
+        @if (count($untracked_networks) > 0 && auth()->user()->isAdmin())
+            <flux:card class="mb-4 border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
+                <div class="flex items-center gap-2 mb-3">
+                    <flux:icon name="exclamation-triangle" class="size-5 text-amber-500" />
+                    <flux:heading size="sm">{{ count($untracked_networks) }} Untracked Network(s)</flux:heading>
+                </div>
+                <flux:subheading class="mb-4">These networks exist on the controller but are not assigned to any team.</flux:subheading>
+
+                <flux:table>
+                    <flux:table.columns>
+                        <flux:table.column>Network ID</flux:table.column>
+                        <flux:table.column>Name</flux:table.column>
+                        <flux:table.column>Type</flux:table.column>
+                        <flux:table.column>Assign to Team</flux:table.column>
+                        <flux:table.column></flux:table.column>
+                    </flux:table.columns>
+                    <flux:table.rows>
+                        @foreach ($untracked_networks as $uNetwork)
+                        <flux:table.row>
+                            <flux:table.cell class="font-mono text-xs">{{ $uNetwork['nwid'] }}</flux:table.cell>
+                            <flux:table.cell>{{ $uNetwork['name'] ?: '—' }}</flux:table.cell>
+                            <flux:table.cell>
+                                @if ($uNetwork['private'])
+                                    <flux:badge color="green" size="sm">Private</flux:badge>
+                                @else
+                                    <flux:badge color="red" size="sm">Public</flux:badge>
+                                @endif
+                            </flux:table.cell>
+                            <flux:table.cell>
+                                <flux:select wire:model="import_team_selections.{{ $uNetwork['nwid'] }}" class="w-48" placeholder="Select team...">
+                                    @foreach ($teams as $team)
+                                        <flux:select.option value="{{ $team['id'] }}">{{ $team['name'] }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                            </flux:table.cell>
+                            <flux:table.cell>
+                                <div class="flex gap-1">
+                                    <flux:button size="xs" icon="arrow-down-tray" wire:click="importNetwork('{{ $uNetwork['nwid'] }}')">Import</flux:button>
+                                    <flux:button size="xs" icon="trash" variant="danger" wire:click="confirmDeleteUntracked('{{ $uNetwork['nwid'] }}', '{{ e($uNetwork['name'] ?? '') }}')" tooltip="Delete from controller" />
+                                </div>
+                            </flux:table.cell>
+                        </flux:table.row>
+                        @endforeach
+                    </flux:table.rows>
+                </flux:table>
+            </flux:card>
+        @endif
 
         @if ($tokens->count() === 0)
             <flux:card>
@@ -550,6 +807,26 @@ new #[Title('ZeroTier Networks')] class extends Component {
                     <flux:button variant="filled">Cancel</flux:button>
                 </flux:modal.close>
                 <flux:button variant="danger" wire:click="deleteNetwork">Delete</flux:button>
+            </div>
+        </flux:modal>
+
+        {{-- Delete Untracked Network Modal --}}
+        <flux:modal name="deleteUntrackedModal" focusable class="max-w-sm">
+            <div class="w-14 h-14 rounded-full bg-red-100 p-4 mt-4 mb-4 mx-auto flex items-center justify-center">
+                <flux:icon name="trash" class="size-6 text-red-600" />
+            </div>
+
+            <flux:heading size="lg" class="text-center">Delete Untracked Network?</flux:heading>
+            <flux:subheading class="text-center mt-2 mb-6">
+                Are you sure you want to delete <strong>{{ $delete_untracked_name }}</strong> from the controller?
+                This will permanently remove the network and cannot be undone.
+            </flux:subheading>
+
+            <div class="flex justify-end gap-2">
+                <flux:modal.close>
+                    <flux:button variant="filled">Cancel</flux:button>
+                </flux:modal.close>
+                <flux:button variant="danger" wire:click="deleteUntrackedNetwork">Delete</flux:button>
             </div>
         </flux:modal>
 

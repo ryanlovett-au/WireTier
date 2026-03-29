@@ -148,6 +148,28 @@ Additional configuration (team roles, permissions, grace periods) is in `config/
 
 ---
 
+## Configuring the Admin Team
+
+WireTier uses an **admin team** to control access to controller management (the Controllers and Peers pages). Only members of the admin team can add ZeroTier controller tokens and view peer topology.
+
+### Steps
+
+1. Register an account and create a team via **Settings → Teams**
+2. Copy the team's UUID from the URL when viewing its settings page — it will look like `settings/team/019d33ec-ddc7-7394-b098-29c2f34d9b4f`
+3. Set that UUID as `ADMIN_TEAM_UUID` in your `.env`:
+
+```env
+ADMIN_TEAM_UUID=019d33ec-ddc7-7394-b098-29c2f34d9b4f
+```
+
+4. Restart your application (or clear config cache with `php artisan config:clear`)
+
+Members of that team will now see the **Controllers** and **Peers** items in the sidebar and have access to link ZeroTier controller API tokens.
+
+> Any team can manage networks and members once a controller token has been linked — the admin team restriction only applies to the token and peer management pages themselves.
+
+---
+
 ## Setting Up ZeroTier
 
 ### What is a ZeroTier Controller?

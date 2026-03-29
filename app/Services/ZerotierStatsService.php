@@ -70,4 +70,46 @@ class ZerotierStatsService
 
         return ['total' => $total, 'by_network' => $byNetwork];
     }
+
+    /**
+     * Get count of untracked networks across all active controllers.
+     * Cached per token for 60 seconds to avoid hammering the API on every dashboard load.
+     *
+     * Returns ['count' => int, 'last_updated' => ?int]
+     */
+    public static function untrackedNetworks(): array
+    {
+        $tokens = ZerotierToken::where('is_active', true)->get();
+        $trackedIds = ZerotierNetwork::pluck('network_id')->toArray();
+        $untrackedCount = 0;
+
+        foreach ($tokens as $token) {
+            $controllerNetworks = Cache::remember(
+                "zt_controller_networks_{$token->id}",
+                60,
+                function () use ($token) {
+                    Cache::put('zt_untracked_last_updated', now()->timestamp, 120);
+
+                    try {
+                        $service = new ZerotierService($token);
+
+                        return $service->getControllerNetworks();
+                    } catch (\Exception) {
+                        return [];
+                    }
+                }
+            );
+
+            foreach ($controllerNetworks as $networkId) {
+                if (! in_array($networkId, $trackedIds)) {
+                    $untrackedCount++;
+                }
+            }
+        }
+
+        return [
+            'count' => $untrackedCount,
+            'last_updated' => Cache::get('zt_untracked_last_updated'),
+        ];
+    }
 }

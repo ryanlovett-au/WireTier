@@ -2,17 +2,20 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
 class ZerotierNetwork extends Model
 {
+    use HasFactory;
+
     protected $keyType = 'string';
 
     public $incrementing = false;
 
-    protected $guarded = [];
+    protected $fillable = ['team_id', 'zerotier_token_id', 'network_id', 'name', 'description', 'private', 'config'];
 
     protected static function booted(): void
     {

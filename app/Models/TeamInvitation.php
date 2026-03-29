@@ -15,7 +15,7 @@ class TeamInvitation extends Model
 
     public $incrementing = false;
 
-    protected $guarded = [];
+    protected $fillable = ['team_id', 'email', 'role', 'expires', 'referer'];
 
     protected static function booted(): void
     {

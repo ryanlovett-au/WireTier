@@ -1,22 +1,29 @@
 <?php
 
-use Livewire\Attributes\Title;
-use Livewire\Component;
+use App\Models\ZerotierNetwork;
 use App\Models\ZerotierToken;
 use App\Services\ZerotierService;
+use Livewire\Attributes\Title;
+use Livewire\Component;
 
-new #[Title('ZeroTier Controllers')] class extends Component {
+new #[Title('ZeroTier Controllers')] class extends Component
+{
     public $tokens;
 
     public string $new_name = '';
+
     public string $new_token = '';
+
     public string $new_host = 'http://localhost:9993';
 
     public string $edit_id = '';
+
     public string $edit_name = '';
+
     public string $edit_host = '';
 
     public string $delete_id = '';
+
     public string $delete_name = '';
 
     public function mount()
@@ -46,7 +53,6 @@ new #[Title('ZeroTier Controllers')] class extends Component {
         ]);
 
         $token = new ZerotierToken;
-        $token->team_id = auth()->user()->team->id;
         $token->name = $this->new_name;
         $token->token = $this->new_token;
         $token->host = $this->new_host;
@@ -132,6 +138,14 @@ new #[Title('ZeroTier Controllers')] class extends Component {
 
     public function deleteToken(): void
     {
+        $networkCount = ZerotierNetwork::where('zerotier_token_id', $this->delete_id)->count();
+
+        if ($networkCount > 0) {
+            Flux::toast(variant: 'danger', heading: 'Cannot Delete', text: "This controller has {$networkCount} active network(s). Remove them first.");
+
+            return;
+        }
+
         ZerotierToken::where('id', $this->delete_id)->delete();
         Flux::modal('deleteTokenConfirm')->close();
         Flux::toast(variant: 'success', heading: 'Deleted', text: 'The token has been removed.');

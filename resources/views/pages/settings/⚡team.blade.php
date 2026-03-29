@@ -1,43 +1,50 @@
 <?php
 
+use App\Mail\TeamAddedUser;
+use App\Mail\TeamInviteUser;
+use App\Models\Team;
+use App\Models\TeamInvitation;
+use App\Models\TeamPermission;
+use App\Models\TeamUser;
+use App\Models\User;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Mail;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\WithPagination;
 
-use App\Models\User;
-use App\Models\Team;
-use App\Models\TeamUser;
-use App\Models\TeamInvitation;
-use App\Models\TeamPermission;
-
-use Illuminate\Support\Facades\Mail;
-use App\Mail\TeamInviteUser;
-use App\Mail\TeamAddedUser;
-
-new #[Title('Team Settings')] class extends Component {
+new #[Title('Team Settings')] class extends Component
+{
     use WithPagination;
 
     public Team $current_team;
+
     public string $action = 'view';
 
     public array $change_user = [];
+
     public string $change_user_role = '';
+
     public string $change_user_expiry = '';
 
     public string $edit_team_name = '';
 
     public string $invite_team_email = '';
+
     public string $invite_team_role = 'member';
+
     public string $invite_team_expires = '';
 
     public string $remove_team_user = '';
+
     public string $remove_team_user_name = '';
 
     public array $permissions = [];
 
-    public function mount()
+    public function mount(?string $id = null)
     {
-        $teamId = request()->query('id', auth()->user()->current_team);
+        $teamId = $id ?? auth()->user()->current_team;
 
         if (! $teamId) {
             abort(404);
@@ -61,7 +68,7 @@ new #[Title('Team Settings')] class extends Component {
         }
     }
 
-    #[\Livewire\Attributes\Computed]
+    #[Computed]
     public function teamMembers()
     {
         return TeamUser::where('team_id', $this->current_team->id)
@@ -69,7 +76,7 @@ new #[Title('Team Settings')] class extends Component {
             ->paginate(15);
     }
 
-    #[\Livewire\Attributes\Computed]
+    #[Computed]
     public function pendingInvitations()
     {
         return TeamInvitation::where('team_id', $this->current_team->id)->get();
@@ -79,6 +86,7 @@ new #[Title('Team Settings')] class extends Component {
     {
         if (! auth()->user()->isTeamAdmin()) {
             Flux::toast(variant: 'danger', heading: 'Permission Denied', text: 'You do not have permission to change roles.');
+
             return;
         }
 
@@ -96,6 +104,7 @@ new #[Title('Team Settings')] class extends Component {
         if (! array_key_exists($this->change_user_role, config('laratier.roles'))) {
             Flux::toast(variant: 'danger', heading: 'Error', text: 'Invalid role selected.');
             Flux::modal('change_role_modal')->close();
+
             return;
         }
 
@@ -167,6 +176,7 @@ new #[Title('Team Settings')] class extends Component {
             // Check not already a member
             if (TeamUser::where('team_id', $this->current_team->id)->where('user_id', $invited->id)->exists()) {
                 Flux::toast(variant: 'warning', heading: 'Already a Member', text: 'This user is already a member of this team.');
+
                 return;
             }
 
@@ -177,10 +187,16 @@ new #[Title('Team Settings')] class extends Component {
             $teamUser->expires = $this->invite_team_expires;
             $teamUser->save();
 
+            // Clean up any pending invitation for this email/team
+            TeamInvitation::where('email', $this->invite_team_email)
+                ->where('team_id', $this->current_team->id)
+                ->delete();
+
             Mail::to($this->invite_team_email)->queue(new TeamAddedUser($this->current_team->name, config('laratier.roles')[$this->invite_team_role]));
 
             Flux::toast(variant: 'success', heading: 'User Added', text: 'The user has been added to this team.');
             $this->invite_team_email = '';
+
             return;
         }
 
@@ -221,6 +237,10 @@ new #[Title('Team Settings')] class extends Component {
 
     public function removeUser(): void
     {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
         TeamUser::where('user_id', $this->remove_team_user)->where('team_id', $this->current_team->id)->delete();
         Flux::modal('removeUserConfirm')->close();
         Flux::toast(variant: 'success', heading: 'Removed', text: 'The user has been removed from the team.');
@@ -236,6 +256,10 @@ new #[Title('Team Settings')] class extends Component {
 
     public function deleteTeam()
     {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
         TeamUser::where('team_id', $this->current_team->id)->delete();
         TeamInvitation::where('team_id', $this->current_team->id)->delete();
         TeamPermission::where('team_id', $this->current_team->id)->delete();
@@ -262,7 +286,7 @@ new #[Title('Team Settings')] class extends Component {
         }
 
         $this->permissions = TeamPermission::where('team_id', $this->current_team->id)->pluck('permission')->toArray();
-        \Illuminate\Support\Facades\Cache::forget('team_'.$this->current_team->id.'_permissions');
+        Cache::forget('team_'.$this->current_team->id.'_permissions');
     }
 }; ?>
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Team;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
@@ -25,12 +26,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Team routes
     Route::livewire('settings/teams', 'pages::settings.teams')->name('teams.index');
-    Route::livewire('settings/team', 'pages::settings.team')->name('teams.show');
+    Route::livewire('settings/team/{id?}', 'pages::settings.team')->name('teams.show');
 
     // Team switcher
     Route::post('teams/{id}/switch', function (string $id) {
         $user = auth()->user();
-        $team = \App\Models\Team::findOrFail($id);
+        $team = Team::findOrFail($id);
 
         abort_unless($user->teams()->where('team_id', $id)->exists(), 403);
 

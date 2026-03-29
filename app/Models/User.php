@@ -3,12 +3,12 @@
 namespace App\Models;
 
 use Database\Factories\UserFactory;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
@@ -20,6 +20,17 @@ class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, TwoFactorAuthenticatable;
+
+    protected $keyType = 'string';
+
+    public $incrementing = false;
+
+    protected static function booted(): void
+    {
+        static::creating(function ($model) {
+            $model->id = Str::uuid7();
+        });
+    }
 
     protected function casts(): array
     {
@@ -108,6 +119,6 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         $teamUser = $this->teamUser;
 
-        return $this->isAdmin() || ($teamUser && $teamUser->first()?->role === 'admin');
+        return $this->isAdmin() || ($teamUser && $teamUser->role === 'admin');
     }
 }

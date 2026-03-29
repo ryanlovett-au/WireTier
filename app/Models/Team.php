@@ -16,7 +16,7 @@ class Team extends Model
 
     public $incrementing = false;
 
-    protected $guarded = [];
+    protected $fillable = ['name', 'icon', 'colour'];
 
     protected static function booted(): void
     {

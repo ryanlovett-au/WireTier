@@ -26,7 +26,7 @@ new #[Title('Teams')] class extends Component {
 
     public function selectTeam($id)
     {
-        return $this->redirect('/settings/team?id='.$id);
+        return $this->redirect(route('teams.show', $id));
     }
 
     public function switchTeam($id)

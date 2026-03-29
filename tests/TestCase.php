@@ -7,6 +7,15 @@ use Laravel\Fortify\Features;
 
 abstract class TestCase extends BaseTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        if (empty(config('app.key'))) {
+            config(['app.key' => 'base64:'.base64_encode(random_bytes(32))]);
+        }
+    }
+
     protected function skipUnlessFortifyHas(string $feature, ?string $message = null): void
     {
         if (! Features::enabled($feature)) {
