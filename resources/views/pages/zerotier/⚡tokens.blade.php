@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AuditLog;
 use App\Models\ZerotierNetwork;
 use App\Models\ZerotierToken;
 use App\Services\ZerotierService;
@@ -70,6 +71,8 @@ new #[Title('ZeroTier Controllers')] class extends Component
             Flux::toast(variant: 'warning', heading: 'Token Saved', text: 'Token saved but could not connect: '.$result['error']);
         }
 
+        AuditLog::record('token.created', 'token', $token->id, ['name' => $token->name]);
+
         $this->new_name = '';
         $this->new_token = '';
         $this->new_host = 'http://localhost:9993';
@@ -95,6 +98,10 @@ new #[Title('ZeroTier Controllers')] class extends Component
             Flux::toast(variant: 'danger', heading: 'Connection Failed', text: $result['error']);
         }
 
+        AuditLog::record('token.tested', 'token', $token->id, [
+            'name' => $token->name, 'success' => $result['success'], 'address' => $result['address'] ?? null,
+        ]);
+
         $this->loadTokens();
     }
 
@@ -107,6 +114,9 @@ new #[Title('ZeroTier Controllers')] class extends Component
         $token = ZerotierToken::findOrFail($tokenId);
         $token->is_active = ! $token->is_active;
         $token->save();
+
+        AuditLog::record('token.toggled', 'token', $token->id, ['name' => $token->name, 'is_active' => $token->is_active]);
+
         $this->loadTokens();
     }
 
@@ -135,6 +145,8 @@ new #[Title('ZeroTier Controllers')] class extends Component
             'host' => $this->edit_host,
         ]);
 
+        AuditLog::record('token.updated', 'token', $this->edit_id, ['name' => $this->edit_name, 'host' => $this->edit_host]);
+
         Flux::modal('editTokenModal')->close();
         Flux::toast(variant: 'success', heading: 'Updated', text: 'Token settings updated.');
         $this->loadTokens();
@@ -161,6 +173,8 @@ new #[Title('ZeroTier Controllers')] class extends Component
 
             return;
         }
+
+        AuditLog::record('token.deleted', 'token', $this->delete_id, ['name' => $this->delete_name]);
 
         ZerotierToken::where('id', $this->delete_id)->delete();
         Flux::modal('deleteTokenConfirm')->close();

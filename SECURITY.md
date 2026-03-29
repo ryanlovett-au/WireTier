@@ -87,6 +87,7 @@ tests/Feature/Security/
   TeamSettingsTest.php          — Team management, role checks, data exposure
   TokensPageTest.php            — Token CRUD, admin guards, delete protection
   ZerotierServiceTest.php       — SSRF, path injection, scheme validation
+  AuditLogTest.php              — Audit log recording, viewer access, scoping, filters
 ```
 
 ## Test Patterns
@@ -214,6 +215,24 @@ The `SecurityHeaders` middleware adds to every response:
 ### Livewire Endpoint
 
 The Livewire update endpoint (`/livewire/update`) is restricted to authenticated users via `Livewire::setUpdateRoute()` in `bootstrap/app.php`. Since all Livewire components require authentication, unauthenticated requests to the update endpoint are rejected at the routing layer.
+
+### Audit Log
+
+All write actions and significant reads are recorded in the `audit_logs` table via `AuditLog::record()`. Each entry captures:
+
+| Field | Description |
+|-------|-------------|
+| `user_id` | The authenticated user (null for system actions) |
+| `team_id` | The team context (null for auth events) |
+| `action` | Dotted action name (e.g. `network.created`, `member.authorized`) |
+| `resource_type` | The type of resource affected (e.g. `network`, `member`, `team`) |
+| `resource_id` | The ID of the affected resource |
+| `details` | JSON with contextual data (names, old/new values, etc) |
+| `ip_address` | The request IP address |
+
+**Logged actions:** auth events (login, logout, registered), all team management (create, update, delete, invite, role changes, permission toggles), controller token operations, network CRUD and import, member operations (authorize, deauthorize, delete, update), and significant reads (team settings viewed, member list viewed).
+
+The audit log viewer at `/settings/audit-log` is accessible to team admins (scoped to their team) and system admins (all logs). It supports filtering by action category, user, date range, and free-text search.
 
 ## Fixes Applied
 

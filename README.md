@@ -35,16 +35,18 @@ A ZeroTier **controller** manages the membership and configuration of networks. 
 - Team switching from the sidebar
 - Grace period handling when the last team member would be removed
 
-### ZeroTier Controller Tokens
-- Add ZeroTier controller API tokens to a team
+### ZeroTier Controller Tokens (Admin Only)
+- Add ZeroTier controller API tokens — globally available to all teams
+- Token values, host addresses, and node addresses are never exposed to non-admin users
 - Automatically detect the controller's node address on save
 - Test connectivity to the controller from the UI
-- Edit or remove tokens; all associated networks are tracked per token
+- Deletion blocked when a controller has active networks
 
 ### Network Management
-- Browse all networks visible to a controller token
-- View network configuration and metadata
-- Navigate into a network to manage its members
+- Each team sees only their own networks, enriched with live data from the controller API
+- Admins can discover untracked networks on controllers and import them to any team
+- Create new networks with subnet suggestions and IP pool configuration
+- Edit network settings: name, privacy, routes, and IP assignment pools
 
 ### Member Management
 - List all members on a network with live status: IP addresses, latency, client version, last seen
@@ -55,11 +57,20 @@ A ZeroTier **controller** manages the membership and configuration of networks. 
 - View peer connections for each controller node
 - Inspect connectivity between nodes in the network
 
+### Audit Log
+- Records all write actions and significant reads across the application
+- Searchable by user, action category, date range, and free text
+- Team admins see their team's logs; system admins see all logs
+- Color-coded action badges by category (auth, team, network, member, controller)
+
 ### Authentication & Security
 - Email/password authentication with email verification
 - Two-factor authentication (TOTP) via Laravel Fortify
 - Password reset via email
 - Session management and account deletion
+- Security headers (X-Frame-Options, HSTS, Content-Type-Options)
+- Per-user rate limiting on API calls and routes
+- Encrypted sessions by default
 
 ## Tech Stack
 
@@ -166,7 +177,7 @@ ADMIN_TEAM_UUID=019d33ec-ddc7-7394-b098-29c2f34d9b4f
 
 Members of that team will now see the **Controllers** and **Peers** items in the sidebar and have access to link ZeroTier controller API tokens.
 
-> Any team can manage networks and members once a controller token has been linked — the admin team restriction only applies to the token and peer management pages themselves.
+> Controller tokens are shared across all teams — non-admin teams see them by name only and can use them to manage their own networks. Admins can discover untracked networks on controllers and import them to any team.
 
 ---
 

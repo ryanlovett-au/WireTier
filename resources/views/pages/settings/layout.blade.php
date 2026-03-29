@@ -16,6 +16,14 @@
                 @endif
             </flux:navlist.group>
         </flux:navlist>
+
+        @if (auth()->user()->isTeamAdmin() || auth()->user()->isAdmin())
+        <flux:navlist aria-label="{{ __('Security') }}" class="mt-4">
+            <flux:navlist.group heading="Security">
+                <flux:navlist.item :href="route('audit-log.index')" wire:navigate>{{ __('Audit Log') }}</flux:navlist.item>
+            </flux:navlist.group>
+        </flux:navlist>
+        @endif
     </div>
 
     <flux:separator class="md:hidden" />

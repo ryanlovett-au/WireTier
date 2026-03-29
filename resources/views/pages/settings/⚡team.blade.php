@@ -2,6 +2,7 @@
 
 use App\Mail\TeamAddedUser;
 use App\Mail\TeamInviteUser;
+use App\Models\AuditLog;
 use App\Models\Team;
 use App\Models\TeamInvitation;
 use App\Models\TeamPermission;
@@ -66,6 +67,8 @@ new #[Title('Team Settings')] class extends Component
         if (auth()->user()->isAdmin()) {
             $this->permissions = TeamPermission::where('team_id', $this->current_team->id)->pluck('permission')->toArray();
         }
+
+        AuditLog::record('team.settings_viewed', 'team', $this->current_team->id);
     }
 
     #[Computed]
@@ -109,6 +112,7 @@ new #[Title('Team Settings')] class extends Component
         }
 
         TeamUser::where('id', $this->change_user['id'])->update(['role' => $this->change_user_role]);
+        AuditLog::record('team.role_changed', 'team', $this->current_team->id, ['user_id' => $this->change_user['user_id'] ?? null, 'new_role' => $this->change_user_role]);
 
         $this->change_user = [];
         $this->change_user_role = '';
@@ -134,6 +138,7 @@ new #[Title('Team Settings')] class extends Component
         }
 
         TeamUser::where('id', $this->change_user['id'])->update(['expires' => $this->change_user_expiry]);
+        AuditLog::record('team.expiry_changed', 'team', $this->current_team->id, ['user_id' => $this->change_user['user_id'] ?? null, 'new_expiry' => $this->change_user_expiry]);
 
         $this->change_user = [];
         $this->change_user_expiry = '';
@@ -149,8 +154,11 @@ new #[Title('Team Settings')] class extends Component
 
         $this->validate(['edit_team_name' => 'required|string|max:255']);
 
+        $oldName = $this->current_team->name;
         Team::where('id', $this->current_team->id)->update(['name' => $this->edit_team_name]);
         $this->current_team = Team::find($this->current_team->id);
+
+        AuditLog::record('team.updated', 'team', $this->current_team->id, ['old_name' => $oldName, 'new_name' => $this->edit_team_name]);
 
         if (auth()->user()->current_team == $this->current_team->id) {
             session(['current_team' => $this->current_team]);
@@ -193,6 +201,7 @@ new #[Title('Team Settings')] class extends Component
                 ->delete();
 
             Mail::to($this->invite_team_email)->queue(new TeamAddedUser($this->current_team->name, config('laratier.roles')[$this->invite_team_role]));
+            AuditLog::record('team.member_added', 'team', $this->current_team->id, ['email' => $this->invite_team_email, 'role' => $this->invite_team_role]);
 
             Flux::toast(variant: 'success', heading: 'User Added', text: 'The user has been added to this team.');
             $this->invite_team_email = '';
@@ -217,6 +226,7 @@ new #[Title('Team Settings')] class extends Component
         $invitation->save();
 
         Mail::to($this->invite_team_email)->queue(new TeamInviteUser($this->current_team->name, config('laratier.roles')[$this->invite_team_role]));
+        AuditLog::record('team.member_invited', 'team', $this->current_team->id, ['email' => $this->invite_team_email, 'role' => $this->invite_team_role]);
 
         Flux::toast(variant: 'success', heading: 'Invitation Sent', text: 'An invitation email has been sent.');
         $this->invite_team_email = '';
@@ -242,6 +252,7 @@ new #[Title('Team Settings')] class extends Component
         }
 
         TeamUser::where('user_id', $this->remove_team_user)->where('team_id', $this->current_team->id)->delete();
+        AuditLog::record('team.member_removed', 'team', $this->current_team->id, ['user_id' => $this->remove_team_user]);
         Flux::modal('removeUserConfirm')->close();
         Flux::toast(variant: 'success', heading: 'Removed', text: 'The user has been removed from the team.');
     }
@@ -249,6 +260,7 @@ new #[Title('Team Settings')] class extends Component
     public function leaveTeam(): void
     {
         TeamUser::where('user_id', auth()->user()->id)->where('team_id', $this->current_team->id)->delete();
+        AuditLog::record('team.member_left', 'team', $this->current_team->id);
         session()->forget('current_team');
         Flux::modal('leaveTeamConfirm')->close();
         $this->redirect('/settings/teams');
@@ -264,6 +276,7 @@ new #[Title('Team Settings')] class extends Component
         TeamInvitation::where('team_id', $this->current_team->id)->delete();
         TeamPermission::where('team_id', $this->current_team->id)->delete();
         Team::where('id', $this->current_team->id)->delete();
+        AuditLog::record('team.deleted', 'team', $this->current_team->id, ['name' => $this->current_team->name]);
 
         return $this->redirect('/settings/teams');
     }
@@ -271,6 +284,7 @@ new #[Title('Team Settings')] class extends Component
     public function cancelInvitation($invitationId): void
     {
         TeamInvitation::where('id', $invitationId)->where('team_id', $this->current_team->id)->delete();
+        AuditLog::record('team.invitation_cancelled', 'team', $this->current_team->id, ['invitation_id' => $invitationId]);
         Flux::toast(variant: 'success', heading: 'Cancelled', text: 'The invitation has been cancelled.');
     }
 
@@ -286,6 +300,7 @@ new #[Title('Team Settings')] class extends Component
         }
 
         $this->permissions = TeamPermission::where('team_id', $this->current_team->id)->pluck('permission')->toArray();
+        AuditLog::record('team.permission_updated', 'team', $this->current_team->id, ['permission' => $permission, 'enabled' => in_array($permission, $this->permissions)]);
         Cache::forget('team_'.$this->current_team->id.'_permissions');
     }
 }; ?>

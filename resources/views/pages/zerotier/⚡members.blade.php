@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AuditLog;
 use App\Models\ZerotierNetwork;
 use App\Models\ZerotierToken;
 use App\Services\ZerotierService;
@@ -53,6 +54,7 @@ new #[Title('Network Members')] class extends Component
         $this->tokenId = $tokenId;
         $this->loadNetwork();
         $this->loadMembers();
+        AuditLog::record('member.list_viewed', 'network', $this->networkId);
     }
 
     protected function getService(): ZerotierService
@@ -131,6 +133,7 @@ new #[Title('Network Members')] class extends Component
         try {
             $this->getService()->authorizeMember($this->networkId, $nodeId);
             Flux::toast(variant: 'success', heading: 'Authorized', text: 'Member '.$nodeId.' has been authorized.');
+            AuditLog::record('member.authorized', 'member', $nodeId, ['network_id' => $this->networkId]);
             $this->loadMembers();
         } catch (Exception $e) {
             report($e);
@@ -147,6 +150,7 @@ new #[Title('Network Members')] class extends Component
         try {
             $this->getService()->deauthorizeMember($this->networkId, $nodeId);
             Flux::toast(variant: 'warning', heading: 'Deauthorized', text: 'Member '.$nodeId.' has been deauthorized.');
+            AuditLog::record('member.deauthorized', 'member', $nodeId, ['network_id' => $this->networkId]);
             $this->loadMembers();
         } catch (Exception $e) {
             report($e);
@@ -170,6 +174,7 @@ new #[Title('Network Members')] class extends Component
             $this->getService()->deleteMember($this->networkId, $this->delete_member_id);
             Flux::modal('deleteMemberModal')->close();
             Flux::toast(variant: 'success', heading: 'Deleted', text: 'Member has been removed.');
+            AuditLog::record('member.deleted', 'member', $this->delete_member_id, ['network_id' => $this->networkId]);
             $this->delete_member_id = '';
             $this->loadMembers();
         } catch (Exception $e) {
@@ -223,6 +228,7 @@ new #[Title('Network Members')] class extends Component
             ]);
             Flux::modal('editMemberModal')->close();
             Flux::toast(variant: 'success', heading: 'Updated', text: 'Member settings have been updated.');
+            AuditLog::record('member.updated', 'member', $this->edit_member_id, ['network_id' => $this->networkId]);
             $this->loadMembers();
         } catch (Exception $e) {
             report($e);
