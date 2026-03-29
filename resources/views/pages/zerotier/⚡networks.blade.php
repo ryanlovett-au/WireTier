@@ -573,7 +573,7 @@ new #[Title('ZeroTier Networks')] class extends Component
 
                 <flux:button size="sm" icon="arrow-path" wire:click="syncAndReload">Refresh</flux:button>
                 @if (auth()->user()->isTeamAdmin() && $tokens->count() > 0)
-                    <flux:button size="sm" icon="plus" variant="filled" wire:click="openCreateModal">Create Network</flux:button>
+                    <flux:button size="sm" icon="plus" variant="primary" wire:click="openCreateModal">Create Network</flux:button>
                 @endif
             </div>
         </div>
