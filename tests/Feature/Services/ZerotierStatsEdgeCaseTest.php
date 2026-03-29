@@ -25,8 +25,8 @@ test('untrackedNetworks counts networks not in database', function () {
     });
 
     $result = ZerotierStatsService::untrackedNetworks();
-    // untracked0000001 appears once per active token (2 tokens in seeder)
-    expect($result['count'])->toBeGreaterThanOrEqual(1);
+    // untracked0000001 should be counted once even if multiple tokens report it
+    expect($result['count'])->toBe(1);
     expect($result['last_updated'])->not->toBeNull();
 });
 

@@ -57,7 +57,7 @@ class ZerotierStatsService
     {
         $tokens = ZerotierToken::where('is_active', true)->get();
         $trackedIds = ZerotierNetwork::pluck('network_id')->toArray();
-        $untrackedCount = 0;
+        $allControllerNetworkIds = [];
 
         foreach ($tokens as $token) {
             $controllerNetworks = Cache::remember(
@@ -77,9 +77,14 @@ class ZerotierStatsService
             );
 
             foreach ($controllerNetworks as $networkId) {
-                if (! in_array($networkId, $trackedIds)) {
-                    $untrackedCount++;
-                }
+                $allControllerNetworkIds[$networkId] = true;
+            }
+        }
+
+        $untrackedCount = 0;
+        foreach (array_keys($allControllerNetworkIds) as $networkId) {
+            if (! in_array($networkId, $trackedIds)) {
+                $untrackedCount++;
             }
         }
 
