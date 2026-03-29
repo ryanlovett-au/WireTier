@@ -73,7 +73,9 @@ new #[Title('Network Members')] class extends Component
 
     protected function getDbNetwork(): ?ZerotierNetwork
     {
-        return ZerotierNetwork::where('network_id', $this->networkId)->first();
+        return ZerotierNetwork::where('network_id', $this->networkId)
+            ->where('team_id', auth()->user()->team?->id)
+            ->first();
     }
 
     public function loadNetwork(): void
