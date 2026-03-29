@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AuditLog;
 use App\Models\Team;
 use App\Models\ZerotierNetwork;
 use App\Models\ZerotierToken;
@@ -280,6 +281,8 @@ new #[Title('ZeroTier Networks')] class extends Component
                 'config' => $network,
             ]);
 
+            AuditLog::record('network.imported', 'network', $networkId, ['name' => $network['name'] ?? null, 'assigned_team' => $teamId]);
+
             $this->untracked_networks = array_values(
                 array_filter($this->untracked_networks, fn ($n) => $n['nwid'] !== $networkId)
             );
@@ -320,6 +323,7 @@ new #[Title('ZeroTier Networks')] class extends Component
             $this->untracked_networks = array_values(
                 array_filter($this->untracked_networks, fn ($n) => $n['nwid'] !== $this->delete_untracked_id)
             );
+            AuditLog::record('network.untracked_deleted', 'network', $this->delete_untracked_id);
             $this->delete_untracked_id = '';
             $this->delete_untracked_name = '';
         } catch (Exception $e) {
@@ -380,6 +384,8 @@ new #[Title('ZeroTier Networks')] class extends Component
             $dbNetwork->private = $this->new_network_private;
             $dbNetwork->config = $network;
             $dbNetwork->save();
+
+            AuditLog::record('network.created', 'network', $dbNetwork->network_id, ['name' => $this->new_network_name, 'token' => $token->name]);
 
             Flux::toast(variant: 'success', heading: 'Network Created', text: 'Network '.$dbNetwork->network_id.' has been created.');
             Flux::modal('createNetworkModal')->close();
@@ -494,6 +500,8 @@ new #[Title('ZeroTier Networks')] class extends Component
                     'private' => $this->edit_private,
                 ]);
 
+            AuditLog::record('network.updated', 'network', $this->editing_network_id, ['name' => $this->edit_name]);
+
             Flux::toast(variant: 'success', heading: 'Saved', text: 'Network settings updated.');
             Flux::modal('editNetworkModal')->close();
             $this->loadNetworks();
@@ -532,6 +540,7 @@ new #[Title('ZeroTier Networks')] class extends Component
                 ->delete();
             Flux::modal('deleteNetworkModal')->close();
             Flux::toast(variant: 'success', heading: 'Deleted', text: 'Network has been deleted.');
+            AuditLog::record('network.deleted', 'network', $this->delete_network_id, ['name' => $this->delete_network_name]);
             $this->delete_network_id = '';
             $this->delete_network_name = '';
             $this->loadNetworks();

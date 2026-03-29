@@ -1,18 +1,23 @@
 <?php
 
-use Livewire\Attributes\Title;
-use Livewire\Component;
+use App\Models\AuditLog;
 use App\Models\Team;
 use App\Models\TeamUser;
+use Livewire\Attributes\Title;
+use Livewire\Component;
 
-new #[Title('Teams')] class extends Component {
+new #[Title('Teams')] class extends Component
+{
     public $teams;
 
     public string $new_team_name = '';
+
     public string $new_team_colour = 'blue';
+
     public string $new_team_icon = 'users';
 
     public array $colours = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'pink', 'zinc'];
+
     public array $icons = ['users', 'building-office', 'server', 'globe-alt', 'shield-check', 'cloud', 'cpu-chip', 'signal', 'wifi', 'key', 'lock-closed', 'command-line', 'circle-stack', 'cube', 'squares-2x2', 'wrench', 'cog-6-tooth', 'beaker', 'academic-cap', 'rocket-launch'];
 
     public function mount()
@@ -36,6 +41,7 @@ new #[Title('Teams')] class extends Component {
 
         if ($teamUser->expired) {
             Flux::toast(variant: 'danger', heading: 'Expired', text: 'Your membership of this team has expired.');
+
             return;
         }
 
@@ -70,6 +76,8 @@ new #[Title('Teams')] class extends Component {
         $teamUser->role = 'admin';
         $teamUser->expires = now()->addYears(10)->format('Y-m-d');
         $teamUser->save();
+
+        AuditLog::record('team.created', 'team', $team->id, ['name' => $team->name]);
 
         $this->teams = auth()->user()->isAdmin() ? Team::all() : auth()->user()->teams->map(fn ($tu) => $tu->team);
         $this->new_team_name = '';

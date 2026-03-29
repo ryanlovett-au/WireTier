@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AuditLog;
 use App\Models\Team;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
@@ -38,6 +39,8 @@ Route::middleware(['auth', 'verified', 'throttle:60,1'])->group(function () {
         $user->current_team = $id;
         $user->save();
         session()->forget('current_team');
+
+        AuditLog::record('team.switched', 'team', $id, ['team_name' => $team->name]);
 
         return redirect()->route('dashboard');
     })->name('teams.switch');

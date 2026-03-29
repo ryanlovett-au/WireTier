@@ -2,9 +2,14 @@
 
 namespace App\Providers;
 
+use App\Models\AuditLog;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -24,6 +29,22 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->registerAuditListeners();
+    }
+
+    protected function registerAuditListeners(): void
+    {
+        Event::listen(Login::class, function (Login $event) {
+            AuditLog::record('auth.login', teamId: null);
+        });
+
+        Event::listen(Logout::class, function (Logout $event) {
+            AuditLog::record('auth.logout', teamId: null);
+        });
+
+        Event::listen(Registered::class, function (Registered $event) {
+            AuditLog::record('auth.registered', details: ['email' => $event->user->email], teamId: null);
+        });
     }
 
     /**
