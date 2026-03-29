@@ -503,21 +503,18 @@ class Security_Audit extends Command
             }
         }
 
-        // Check Livewire components for rate limiting on write operations
-        $files = $this->get_zerotier_blade_files();
-        foreach ($files as $file) {
-            $content = File::get($file);
-            $basename = basename($file);
-
-            // Components that interact with external APIs should have rate limiting
-            if (str_contains($content, 'ZerotierService') && ! str_contains($content, 'RateLimiter') && ! str_contains($content, 'throttle')) {
+        // Check that ZerotierService itself has rate limiting (covers all components)
+        $serviceFile = app_path('Services/ZerotierService.php');
+        if (File::exists($serviceFile)) {
+            $serviceContent = File::get($serviceFile);
+            if (! str_contains($serviceContent, 'RateLimiter') && ! str_contains($serviceContent, 'throttle')) {
                 $this->findings[] = AuditReport::finding(
                     'medium',
                     'Rate Limiting',
-                    $file,
+                    $serviceFile,
                     0,
-                    "No rate limiting on ZeroTier API calls in {$basename} — external API can be abused",
-                    'Implement per-user rate limiting on methods that make external API calls'
+                    'No rate limiting on ZeroTier API calls — external API can be abused',
+                    'Implement per-user rate limiting in the HTTP client method'
                 );
             }
         }
@@ -586,8 +583,9 @@ class Security_Audit extends Command
             $content = File::get($file);
             $basename = basename($file);
 
-            // Look for public properties that are models or contain sensitive data
-            if (preg_match_all('/public\s+(?:Team|User|ZerotierToken)\s+\$(\w+)/', $content, $matches, PREG_OFFSET_CAPTURE)) {
+            // Only flag models with sensitive fields (User has password, ZerotierToken has token/host)
+            // Team only has name/icon/colour — safe for Livewire exposure
+            if (preg_match_all('/public\s+(?:User|ZerotierToken)\s+\$(\w+)/', $content, $matches, PREG_OFFSET_CAPTURE)) {
                 foreach ($matches[1] as $match) {
                     $propName = $match[0];
                     $offset = $match[1];

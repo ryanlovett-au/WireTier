@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ZerotierToken;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\RateLimiter;
 
 class ZerotierService
 {
@@ -38,6 +39,15 @@ class ZerotierService
 
     protected function client()
     {
+        $userId = auth()->id() ?? 'system';
+        $key = "zt_api:{$userId}";
+
+        if (RateLimiter::tooManyAttempts($key, 120)) {
+            throw new \RuntimeException('Too many API requests. Please wait before trying again.');
+        }
+
+        RateLimiter::hit($key, 60);
+
         return Http::withHeaders([
             'X-ZT1-Auth' => $this->token,
         ])->baseUrl($this->baseUrl)
