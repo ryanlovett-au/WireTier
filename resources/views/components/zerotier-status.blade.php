@@ -2,23 +2,17 @@
 @php
     $tokens = \App\Models\ZerotierToken::where('is_active', true)->get();
     $statuses = $tokens->map(function ($token) {
-        return \Illuminate\Support\Facades\Cache::remember(
-            "zt_status_{$token->id}",
-            60,
-            function () use ($token) {
-                try {
-                    $service = new \App\Services\ZerotierService($token);
-                    $status = $service->getStatus();
-                    return [
-                        'online' => $status['online'] ?? false,
-                        'address' => $status['address'] ?? null,
-                        'name' => $token->name,
-                    ];
-                } catch (\Exception) {
-                    return ['online' => false, 'address' => null, 'name' => $token->name];
-                }
-            }
-        );
+        try {
+            $service = new \App\Services\ZerotierService($token);
+            $status = $service->getStatus();
+            return [
+                'online' => $status['online'] ?? false,
+                'address' => $status['address'] ?? null,
+                'name' => $token->name,
+            ];
+        } catch (\Exception) {
+            return ['online' => false, 'address' => null, 'name' => $token->name];
+        }
     });
 @endphp
 

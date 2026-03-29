@@ -1,9 +1,12 @@
 <?php
 
 use App\Models\AuditLog;
+use App\Models\ZerotierMember;
 use App\Models\ZerotierNetwork;
 use App\Models\ZerotierToken;
 use App\Services\ZerotierService;
+use App\Services\ZerotierSyncService;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
@@ -17,6 +20,8 @@ new #[Title('Network Members')] class extends Component
 
     public array $members = [];
 
+    public int $lastRefreshedAt = 0;
+
     // Delete confirmation
     public string $delete_member_id = '';
 
@@ -24,6 +29,8 @@ new #[Title('Network Members')] class extends Component
     public string $edit_member_id = '';
 
     public string $edit_member_name = '';
+
+    public string $edit_member_description = '';
 
     public array $edit_ip_assignments = [];
 
@@ -64,64 +71,73 @@ new #[Title('Network Members')] class extends Component
         return new ZerotierService($token);
     }
 
+    protected function getDbNetwork(): ?ZerotierNetwork
+    {
+        return ZerotierNetwork::where('network_id', $this->networkId)
+            ->where('team_id', auth()->user()->team?->id)
+            ->first();
+    }
+
     public function loadNetwork(): void
     {
-        try {
-            $this->network = $this->getService()->getControllerNetwork($this->networkId);
-        } catch (Exception $e) {
-            report($e);
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load network. Please try again.');
+        $dbNetwork = $this->getDbNetwork();
+
+        if ($dbNetwork) {
+            $config = $dbNetwork->config ?? [];
+            $this->network = array_merge($config, [
+                'nwid' => $dbNetwork->network_id,
+                'name' => $dbNetwork->name ?? ($config['name'] ?? 'Unknown'),
+                'private' => $dbNetwork->private,
+                '_synced_at' => $dbNetwork->synced_at?->diffForHumans(),
+            ]);
         }
     }
 
     public function loadMembers(): void
     {
-        $service = $this->getService();
+        $dbNetwork = $this->getDbNetwork();
 
-        try {
-            $memberIds = $service->getNetworkMembers($this->networkId);
+        if (! $dbNetwork) {
             $this->members = [];
 
-            // The controller node address is the first 10 chars of the network ID
-            $controllerAddress = substr($this->networkId, 0, 10);
-
-            // Index peers by address for cross-referencing online status
-            try {
-                $peers = collect($service->getPeers())->keyBy('address');
-            } catch (Exception) {
-                $peers = collect();
-            }
-
-            foreach (array_keys($memberIds) as $nodeId) {
-                try {
-                    $member = $service->getNetworkMember($this->networkId, $nodeId);
-
-                    // The local controller node is always online (it never appears in the peer list)
-                    if ($nodeId === $controllerAddress) {
-                        $member['_online'] = true;
-                        $member['_latency'] = 0;
-                        $member['_physicalAddr'] = null;
-                        // Enrich with live peer data if available
-                    } elseif ($peer = $peers->get($nodeId)) {
-                        $activePaths = collect($peer['paths'] ?? [])->where('active', true);
-                        $member['_online'] = $activePaths->isNotEmpty();
-                        $member['_latency'] = $peer['latency'] ?? -1;
-                        $member['_physicalAddr'] = $activePaths->first()['address'] ?? ($peer['physicalAddress'] ?? null);
-                    } else {
-                        $member['_online'] = false;
-                        $member['_latency'] = $member['latency'] ?? -1;
-                        $member['_physicalAddr'] = $member['physicalAddr'] ?? null;
-                    }
-
-                    $this->members[] = $member;
-                } catch (Exception $e) {
-                    // Skip members that error
-                }
-            }
-        } catch (Exception $e) {
-            report($e);
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load members. Please try again.');
+            return;
         }
+
+        $this->members = Cache::flexible("network_{$dbNetwork->id}_members", [30, 60], function () use ($dbNetwork) {
+            return ZerotierMember::where('zerotier_network_id', $dbNetwork->id)
+                ->orderByDesc('is_online')
+                ->orderBy('node_id')
+                ->get()
+                ->map(fn ($m) => [
+                    'address' => $m->node_id,
+                    'name' => $m->name,
+                    'description' => $m->description,
+                    'authorized' => $m->authorised,
+                    'activeBridge' => $m->active_bridge,
+                    'noAutoAssignIps' => $m->no_auto_assign_ips,
+                    'ipAssignments' => $m->ip_assignments ?? [],
+                    '_version' => $m->client_version,
+                    '_online' => $m->is_online,
+                    '_latency' => $m->latency,
+                    '_physicalAddr' => $m->physical_address,
+                    '_synced_at' => $m->synced_at?->diffForHumans(),
+                ])
+                ->toArray();
+        });
+
+        $this->lastRefreshedAt = $dbNetwork->synced_at ? $dbNetwork->synced_at->timestamp : 0;
+    }
+
+    public function syncAndReload(): void
+    {
+        $dbNetwork = $this->getDbNetwork();
+
+        if ($dbNetwork) {
+            ZerotierSyncService::syncNetwork($dbNetwork);
+        }
+
+        $this->loadNetwork();
+        $this->loadMembers();
     }
 
     public function authorizeMember($nodeId): void
@@ -132,9 +148,9 @@ new #[Title('Network Members')] class extends Component
 
         try {
             $this->getService()->authorizeMember($this->networkId, $nodeId);
-            Flux::toast(variant: 'success', heading: 'Authorized', text: 'Member '.$nodeId.' has been authorized.');
-            AuditLog::record('member.authorized', 'member', $nodeId, ['network_id' => $this->networkId]);
-            $this->loadMembers();
+            Flux::toast(variant: 'success', heading: 'Authorised', text: 'Member '.$nodeId.' has been authorised.');
+            AuditLog::record('member.authorised', 'member', $nodeId, ['network_id' => $this->networkId]);
+            $this->syncAndReload();
         } catch (Exception $e) {
             report($e);
             Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
@@ -149,9 +165,9 @@ new #[Title('Network Members')] class extends Component
 
         try {
             $this->getService()->deauthorizeMember($this->networkId, $nodeId);
-            Flux::toast(variant: 'warning', heading: 'Deauthorized', text: 'Member '.$nodeId.' has been deauthorized.');
-            AuditLog::record('member.deauthorized', 'member', $nodeId, ['network_id' => $this->networkId]);
-            $this->loadMembers();
+            Flux::toast(variant: 'warning', heading: 'Deauthorised', text: 'Member '.$nodeId.' has been deauthorised.');
+            AuditLog::record('member.deauthorised', 'member', $nodeId, ['network_id' => $this->networkId]);
+            $this->syncAndReload();
         } catch (Exception $e) {
             report($e);
             Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
@@ -176,7 +192,7 @@ new #[Title('Network Members')] class extends Component
             Flux::toast(variant: 'success', heading: 'Deleted', text: 'Member has been removed.');
             AuditLog::record('member.deleted', 'member', $this->delete_member_id, ['network_id' => $this->networkId]);
             $this->delete_member_id = '';
-            $this->loadMembers();
+            $this->syncAndReload();
         } catch (Exception $e) {
             report($e);
             Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
@@ -185,19 +201,25 @@ new #[Title('Network Members')] class extends Component
 
     public function editMemberModal($nodeId): void
     {
-        try {
-            $member = $this->getService()->getNetworkMember($this->networkId, $nodeId);
-            $this->edit_member_id = $nodeId;
-            $this->edit_member_name = $member['name'] ?? '';
-            $this->edit_ip_assignments = $member['ipAssignments'] ?? [];
-            $this->edit_active_bridge = $member['activeBridge'] ?? false;
-            $this->edit_no_auto_assign = $member['noAutoAssignIps'] ?? false;
-            $this->new_ip = '';
-            Flux::modal('editMemberModal')->show();
-        } catch (Exception $e) {
-            report($e);
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
+        $dbNetwork = $this->getDbNetwork();
+        $member = ZerotierMember::where('zerotier_network_id', $dbNetwork?->id)
+            ->where('node_id', $nodeId)
+            ->first();
+
+        if (! $member) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Member not found.');
+
+            return;
         }
+
+        $this->edit_member_id = $nodeId;
+        $this->edit_member_name = $member->name ?? '';
+        $this->edit_member_description = $member->description ?? '';
+        $this->edit_ip_assignments = $member->ip_assignments ?? [];
+        $this->edit_active_bridge = $member->active_bridge;
+        $this->edit_no_auto_assign = $member->no_auto_assign_ips;
+        $this->new_ip = '';
+        Flux::modal('editMemberModal')->show();
     }
 
     public function addIpAssignment(): void
@@ -222,14 +244,24 @@ new #[Title('Network Members')] class extends Component
 
         try {
             $this->getService()->updateNetworkMember($this->networkId, $this->edit_member_id, [
+                'name' => $this->edit_member_name,
                 'ipAssignments' => $this->edit_ip_assignments,
                 'activeBridge' => $this->edit_active_bridge,
                 'noAutoAssignIps' => $this->edit_no_auto_assign,
             ]);
+
+            // Save description locally (not supported by ZT API)
+            $dbNetwork = $this->getDbNetwork();
+            if ($dbNetwork) {
+                ZerotierMember::where('zerotier_network_id', $dbNetwork->id)
+                    ->where('node_id', $this->edit_member_id)
+                    ->update(['description' => $this->edit_member_description]);
+            }
+
             Flux::modal('editMemberModal')->close();
             Flux::toast(variant: 'success', heading: 'Updated', text: 'Member settings have been updated.');
-            AuditLog::record('member.updated', 'member', $this->edit_member_id, ['network_id' => $this->networkId]);
-            $this->loadMembers();
+            AuditLog::record('member.updated', 'member', $this->edit_member_id, ['network_id' => $this->networkId, 'name' => $this->edit_member_name]);
+            $this->syncAndReload();
         } catch (Exception $e) {
             report($e);
             Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
@@ -237,7 +269,7 @@ new #[Title('Network Members')] class extends Component
     }
 }; ?>
 
-<div class="mx-auto max-w-5xl p-6" wire:poll.60s="loadMembers">
+<div class="mx-auto max-w-5xl p-6" wire:poll.10s="loadMembers">
         <div class="flex items-center justify-between mb-6">
             <div>
                 <div class="flex items-center gap-2 mb-1">
@@ -270,8 +302,23 @@ new #[Title('Network Members')] class extends Component
                     @endif
                 </div>
             </div>
-            <flux:button size="sm" icon="arrow-path" wire:click="loadMembers">Refresh</flux:button>
+            <flux:button size="sm" icon="arrow-path" wire:click="syncAndReload">Refresh</flux:button>
         </div>
+        @if ($lastRefreshedAt)
+        <div
+            x-data="{ label: '' }"
+            x-init="setInterval(() => {
+                let s = Math.floor(Date.now()/1000) - $wire.lastRefreshedAt;
+                if (s < 5) label = 'just now';
+                else if (s < 60) label = s + 's ago';
+                else if (s < 3600) label = Math.floor(s/60) + 'm ago';
+                else label = Math.floor(s/3600) + 'h ago';
+            }, 1000)"
+            class="text-xs text-zinc-400 text-right -mt-4 mb-4"
+        >
+            Last refreshed &middot; <span x-text="label"></span>
+        </div>
+        @endif
 
         @if (count($members) === 0)
             <flux:card>
@@ -285,7 +332,7 @@ new #[Title('Network Members')] class extends Component
             <flux:card>
                 <flux:table>
                     <flux:table.columns>
-                        <flux:table.column>Node ID</flux:table.column>
+                        <flux:table.column>Member</flux:table.column>
                         <flux:table.column>IP Assignments</flux:table.column>
                         <flux:table.column>Authorized</flux:table.column>
                         <flux:table.column>Bridge</flux:table.column>
@@ -296,7 +343,15 @@ new #[Title('Network Members')] class extends Component
                     <flux:table.rows>
                     @foreach ($members as $member)
                         <flux:table.row :key="$member['address'] ?? $member['id'] ?? $loop->index">
-                            <flux:table.cell class="font-mono text-xs">{{ $member['address'] ?? $member['id'] ?? '—' }}</flux:table.cell>
+                            <flux:table.cell>
+                                @if (! empty($member['name']))
+                                    <div class="text-sm font-medium">{{ $member['name'] }}</div>
+                                @endif
+                                @if (! empty($member['description']))
+                                    <div class="text-xs text-zinc-400">{{ $member['description'] }}</div>
+                                @endif
+                                <div class="font-mono text-xs text-zinc-400">{{ $member['address'] ?? '—' }}</div>
+                            </flux:table.cell>
                             <flux:table.cell class="font-mono text-xs">
                                 @foreach (($member['ipAssignments'] ?? []) as $ip)
                                     <div>{{ $ip }}</div>
@@ -331,7 +386,9 @@ new #[Title('Network Members')] class extends Component
                                 @endif
                             </flux:table.cell>
                             <flux:table.cell class="text-xs text-zinc-500">
-                                <div>v{{ ($member['vMajor'] ?? '?') }}.{{ ($member['vMinor'] ?? '?') }}.{{ ($member['vRev'] ?? '?') }}</div>
+                                @if (! empty($member['_version']))
+                                    <div>v{{ $member['_version'] }}</div>
+                                @endif
                                 @if (! empty($member['_physicalAddr']))
                                     <div class="font-mono">{{ $member['_physicalAddr'] }}</div>
                                 @endif
@@ -343,9 +400,9 @@ new #[Title('Network Members')] class extends Component
                             <flux:table.cell>
                                 <div class="flex gap-1">
                                     @if (! ($member['authorized'] ?? false))
-                                        <flux:button size="xs" icon="check" style="background:#16a34a;color:#fff;border-color:#16a34a;" tooltip="Authorize" wire:click="authorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
+                                        <flux:button size="xs" icon="check" style="background:#16a34a;color:#fff;border-color:#16a34a;" tooltip="Authorise" wire:click="authorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
                                     @else
-                                        <flux:button size="xs" icon="x-mark" style="background:#dc2626;color:#fff;border-color:#dc2626;" tooltip="Deauthorize" wire:click="deauthorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
+                                        <flux:button size="xs" icon="x-mark" style="background:#dc2626;color:#fff;border-color:#dc2626;" tooltip="Deauthorise" wire:click="deauthorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
                                     @endif
                                     <flux:button size="xs" icon="pencil" tooltip="Edit Member" wire:click="editMemberModal('{{ $member['address'] ?? $member['id'] }}')" />
                                     <flux:button size="xs" icon="trash" style="background:#18181b;color:#fff;border-color:#18181b;" tooltip="Delete" wire:click="confirmDeleteMember('{{ $member['address'] ?? $member['id'] }}')" />
@@ -377,6 +434,11 @@ new #[Title('Network Members')] class extends Component
         <flux:modal name="editMemberModal" focusable class="w-[450px]">
             <flux:heading size="lg" class="mb-4">Edit Member</flux:heading>
             <flux:subheading class="mb-4">Node: <span class="font-mono">{{ $edit_member_id }}</span></flux:subheading>
+
+            <div class="space-y-4 mb-4">
+                <flux:input wire:model="edit_member_name" label="Name" placeholder="e.g. Ryan's Laptop" />
+                <flux:textarea wire:model="edit_member_description" label="Description" placeholder="Optional notes about this device..." rows="2" />
+            </div>
 
             <div class="mb-4">
                 <flux:label>IP Assignments</flux:label>

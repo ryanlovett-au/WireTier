@@ -79,7 +79,7 @@ All security tests live under `tests/Feature/Security/` and use the `RefreshData
 tests/Feature/Security/
   AuthenticationTest.php        — Login rate limiting, 2FA, session management
   InvitationSecurityTest.php    — Invitation lifecycle, single-use, expiry
-  MembersPageTest.php           — Member operations, team isolation, authorization
+  MembersPageTest.php           — Member operations, team isolation, authorisation
   ModelSecurityTest.php         — Mass assignment, serialization, raw SQL safety
   NetworksPageTest.php          — Network CRUD, team scoping, import flow
   PeersPageTest.php             — Peers page access, admin gating
@@ -185,7 +185,7 @@ Networks are scoped to teams via `team_id` on `zerotier_networks`. The networks 
 | `isTeamAdmin()` | Network CRUD, member operations, team settings | User is a system admin OR has `admin` role in their current team |
 | `belongsToTeam()` | Team settings mount | User has a TeamUser record for the team |
 
-Every Livewire method that performs a write operation has its own authorization check, independent of the page-level `mount()` guard (defense-in-depth).
+Every Livewire method that performs a write operation has its own authorisation check, independent of the page-level `mount()` guard (defence-in-depth).
 
 ### Input Validation
 
@@ -224,13 +224,13 @@ All write actions and significant reads are recorded in the `audit_logs` table v
 |-------|-------------|
 | `user_id` | The authenticated user (null for system actions) |
 | `team_id` | The team context (null for auth events) |
-| `action` | Dotted action name (e.g. `network.created`, `member.authorized`) |
+| `action` | Dotted action name (e.g. `network.created`, `member.authorised`) |
 | `resource_type` | The type of resource affected (e.g. `network`, `member`, `team`) |
 | `resource_id` | The ID of the affected resource |
 | `details` | JSON with contextual data (names, old/new values, etc) |
 | `ip_address` | The request IP address |
 
-**Logged actions:** auth events (login, logout, registered), all team management (create, update, delete, invite, role changes, permission toggles), controller token operations, network CRUD and import, member operations (authorize, deauthorize, delete, update), and significant reads (team settings viewed, member list viewed).
+**Logged actions:** auth events (login, logout, registered), all team management (create, update, delete, invite, role changes, permission toggles), controller token operations, network CRUD and import, member operations (authorise, deauthorise, delete, update), and significant reads (team settings viewed, member list viewed).
 
 The audit log viewer at `/settings/audit-log` is accessible to team admins (scoped to their team) and system admins (all logs). It supports filtering by action category, user, date range, and free-text search.
 
@@ -241,7 +241,7 @@ The audit log viewer at `/settings/audit-log` is accessible to team admins (scop
 | HIGH | `isTeamAdmin()` returned true for all users | Replace `->first()` on resolved HasOne with direct property access |
 | HIGH | Mass assignment on 6 models via `$guarded = []` | Replace with explicit `$fillable` on each model |
 | HIGH | `removeUser()` and `deleteTeam()` missing admin checks | Add `isTeamAdmin()` guard |
-| HIGH | Member authorize/deauthorize/delete had no authorization | Add `isTeamAdmin()` guard to all member write operations |
+| HIGH | Member authorise/deauthorise/delete had no authorisation | Add `isTeamAdmin()` guard to all member write operations |
 | MEDIUM | SSRF via non-HTTP host schemes | Validate scheme is `http` or `https` in constructor |
 | MEDIUM | Path injection via networkId/nodeId | Add `validatePathSegment()` regex check on all path parameters |
 | MEDIUM | Empty token fell back to localhost:9993 | Throw `InvalidArgumentException` |

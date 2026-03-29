@@ -1,6 +1,8 @@
 <?php
 
 use App\Models\User;
+use App\Models\ZerotierMember;
+use App\Models\ZerotierNetwork;
 use Database\Seeders\SecurityTestSeeder;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
@@ -92,15 +94,16 @@ test('members page redirects when user has no team', function () {
     ])->assertRedirect('/settings/teams');
 });
 
-test('loadMembers fetches members from API', function () {
+test('loadMembers shows synced members from DB', function () {
     membersHttpFakes();
     $this->actingAs($this->alphaAdmin);
     session()->forget('current_team');
 
+    // Sync first to populate members in DB
     $component = Livewire::test('pages::zerotier.members', [
         'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
         'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
-    ]);
+    ])->call('syncAndReload');
 
     $members = $component->get('members');
     expect($members)->not->toBeEmpty();
@@ -154,18 +157,49 @@ test('deleteMember calls API to delete', function () {
     expect($tracker->called)->toBeTrue();
 });
 
-test('editMemberModal populates edit fields', function () {
+test('editMemberModal populates edit fields from DB', function () {
     membersHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    // Sync to populate members in DB first
+    $component = Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])->call('syncAndReload')
+        ->call('editMemberModal', 'aabb000001');
+
+    $component->assertSet('edit_member_id', 'aabb000001');
+    $component->assertSet('edit_member_description', '');
+    expect($component->get('edit_ip_assignments'))->toBe(['10.0.0.2']);
+});
+
+test('saveMember updates name and description', function () {
+    $tracker = (object) ['called' => false];
+    membersHttpFakes($tracker);
+
     $this->actingAs($this->alphaAdmin);
     session()->forget('current_team');
 
     $component = Livewire::test('pages::zerotier.members', [
         'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
         'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
-    ])->call('editMemberModal', 'aabb000001');
+    ])->call('syncAndReload')
+        ->call('editMemberModal', 'aabb000001')
+        ->set('edit_member_name', 'Ryans Laptop')
+        ->set('edit_member_description', 'Primary dev machine')
+        ->call('saveMember');
 
-    $component->assertSet('edit_member_id', 'aabb000001');
-    expect($component->get('edit_ip_assignments'))->toBe(['10.0.0.2']);
+    // Name should be pushed to API
+    expect($tracker->called)->toBeTrue();
+
+    // Description should be saved locally in DB
+    $dbNetwork = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+    $member = ZerotierMember::where('zerotier_network_id', $dbNetwork->id)
+        ->where('node_id', 'aabb000001')
+        ->first();
+
+    expect($member->description)->toBe('Primary dev machine');
 });
 
 test('addIpAssignment and removeIpAssignment manage IP arrays', function () {

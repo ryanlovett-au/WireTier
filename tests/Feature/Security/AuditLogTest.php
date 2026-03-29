@@ -107,7 +107,7 @@ test('member authorization is logged', function () {
         'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
     ])->call('authorizeMember', 'aabb000001');
 
-    $log = AuditLog::where('action', 'member.authorized')->first();
+    $log = AuditLog::where('action', 'member.authorised')->first();
     expect($log)->not->toBeNull();
     expect($log->resource_id)->toBe('aabb000001');
     expect($log->details['network_id'])->toBe(SecurityTestSeeder::ALPHA_NETWORK_ID);

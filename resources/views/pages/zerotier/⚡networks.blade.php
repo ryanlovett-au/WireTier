@@ -5,6 +5,8 @@ use App\Models\Team;
 use App\Models\ZerotierNetwork;
 use App\Models\ZerotierToken;
 use App\Services\ZerotierService;
+use App\Services\ZerotierSyncService;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
@@ -15,6 +17,8 @@ new #[Title('ZeroTier Networks')] class extends Component
     public array $networks = [];
 
     public string $selectedToken = '';
+
+    public int $lastRefreshedAt = 0;
 
     // Delete confirmation
     public string $delete_network_id = '';
@@ -128,54 +132,53 @@ new #[Title('ZeroTier Networks')] class extends Component
             return;
         }
 
-        // DB-first: only show networks this team owns for the selected controller
-        $dbNetworks = ZerotierNetwork::where('team_id', auth()->user()->team->id)
-            ->where('zerotier_token_id', $this->selectedToken)
-            ->get();
+        // DB-only: read from synced data, no API calls
+        $teamId = auth()->user()->team->id;
+        $tokenId = $this->selectedToken;
 
-        $token = ZerotierToken::findOrFail($this->selectedToken);
-        $service = new ZerotierService($token);
+        $this->networks = Cache::flexible("team_{$teamId}_networks_{$tokenId}", [30, 60], function () use ($teamId, $tokenId) {
+            return ZerotierNetwork::where('team_id', $teamId)
+                ->where('zerotier_token_id', $tokenId)
+                ->withCount([
+                    'members as authorised_count' => fn ($q) => $q->where('authorised', true),
+                    'members as pending_count' => fn ($q) => $q->where('authorised', false),
+                ])
+                ->get()
+                ->map(function ($n) {
+                    $config = $n->config ?? [];
 
-        $this->networks = [];
+                    return [
+                        'id' => $n->network_id,
+                        'nwid' => $n->network_id,
+                        'name' => $n->name ?? 'Unknown',
+                        'private' => $n->private,
+                        'routes' => $config['routes'] ?? [],
+                        'ipAssignmentPools' => $config['ipAssignmentPools'] ?? [],
+                        '_member_count' => $n->authorised_count ?? 0,
+                        '_pending_count' => $n->pending_count ?? 0,
+                        '_synced_at' => $n->synced_at?->diffForHumans(),
+                    ];
+                })
+                ->toArray();
+        });
 
-        foreach ($dbNetworks as $dbNetwork) {
-            $offline = [
-                'id' => $dbNetwork->network_id,
-                'nwid' => $dbNetwork->network_id,
-                'name' => $dbNetwork->name ?? 'Unknown',
-                'private' => $dbNetwork->private,
-                'routes' => [],
-                '_member_count' => 0,
-                '_pending_count' => 0,
-                '_offline' => true,
-            ];
+        // Use the most recent synced_at from the DB, not "now"
+        $latestSync = ZerotierNetwork::where('team_id', $teamId)
+            ->where('zerotier_token_id', $tokenId)
+            ->max('synced_at');
+        $this->lastRefreshedAt = $latestSync ? strtotime($latestSync) : 0;
+    }
 
-            try {
-                $network = $service->getControllerNetwork($dbNetwork->network_id);
+    public function syncAndReload(): void
+    {
+        if (! empty($this->selectedToken)) {
+            ZerotierSyncService::syncToken($this->selectedToken);
+        }
 
-                // If API returned empty/invalid data, use offline fallback
-                if (empty($network) || ! isset($network['nwid'])) {
-                    $this->networks[] = $offline;
+        $this->loadNetworks();
 
-                    continue;
-                }
-
-                $memberIds = array_keys($service->getNetworkMembers($dbNetwork->network_id));
-                $authorized = 0;
-                $pending = 0;
-                foreach ($memberIds as $nodeId) {
-                    try {
-                        $m = $service->getNetworkMember($dbNetwork->network_id, $nodeId);
-                        ($m['authorized'] ?? false) ? $authorized++ : $pending++;
-                    } catch (Exception) {
-                    }
-                }
-                $network['_member_count'] = $authorized;
-                $network['_pending_count'] = $pending;
-                $this->networks[] = $network;
-            } catch (Exception) {
-                $this->networks[] = $offline;
-            }
+        if (auth()->user()->isAdmin()) {
+            $this->discoverNetworks();
         }
     }
 
@@ -385,6 +388,8 @@ new #[Title('ZeroTier Networks')] class extends Component
             $dbNetwork->config = $network;
             $dbNetwork->save();
 
+            ZerotierSyncService::syncNetwork($dbNetwork);
+
             AuditLog::record('network.created', 'network', $dbNetwork->network_id, ['name' => $this->new_network_name, 'token' => $token->name]);
 
             Flux::toast(variant: 'success', heading: 'Network Created', text: 'Network '.$dbNetwork->network_id.' has been created.');
@@ -551,7 +556,7 @@ new #[Title('ZeroTier Networks')] class extends Component
     }
 }; ?>
 
-<div class="mx-auto max-w-5xl p-6" wire:poll.60s="loadNetworks">
+<div class="mx-auto max-w-5xl p-6" wire:poll.30s="loadNetworks">
         <div class="flex items-center justify-between mb-6">
             <div>
                 <flux:heading size="xl">Networks</flux:heading>
@@ -566,12 +571,27 @@ new #[Title('ZeroTier Networks')] class extends Component
                     </flux:select>
                 @endif
 
-                <flux:button size="sm" icon="arrow-path" wire:click="loadNetworks">Refresh</flux:button>
+                <flux:button size="sm" icon="arrow-path" wire:click="syncAndReload">Refresh</flux:button>
                 @if (auth()->user()->isTeamAdmin() && $tokens->count() > 0)
-                    <flux:button icon="plus" variant="filled" wire:click="openCreateModal">Create Network</flux:button>
+                    <flux:button size="sm" icon="plus" variant="filled" wire:click="openCreateModal">Create Network</flux:button>
                 @endif
             </div>
         </div>
+        @if ($lastRefreshedAt)
+        <div
+            x-data="{ label: '' }"
+            x-init="setInterval(() => {
+                let s = Math.floor(Date.now()/1000) - $wire.lastRefreshedAt;
+                if (s < 5) label = 'just now';
+                else if (s < 60) label = s + 's ago';
+                else if (s < 3600) label = Math.floor(s/60) + 'm ago';
+                else label = Math.floor(s/3600) + 'h ago';
+            }, 1000)"
+            class="text-xs text-zinc-400 text-right -mt-4 mb-4"
+        >
+            Last refreshed &middot; <span x-text="label"></span>
+        </div>
+        @endif
 
         @if (count($untracked_networks) > 0 && auth()->user()->isAdmin())
             <flux:card class="mb-4 border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
@@ -863,7 +883,7 @@ new #[Title('ZeroTier Networks')] class extends Component
             </div>
             <flux:input wire:model="new_network_subnet" placeholder="or type your own…" class="mb-5" />
 
-            <flux:switch wire:model="new_network_private" label="Private Network" description="Members must be authorized to join" class="mb-6" />
+            <flux:switch wire:model="new_network_private" label="Private Network" description="Members must be authorised to join" class="mb-6" />
 
             <div class="flex justify-end space-x-2 mt-4">
                 <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>
