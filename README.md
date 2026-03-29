@@ -11,7 +11,7 @@ WireTier provides a team-based interface for sharing access to ZeroTier controll
 | ![Dashboard](docs/screenshots/dashboard.jpg) | ![Networks](docs/screenshots/networks.jpg) |
 | *Dashboard — overview of networks, team members, and devices* | *Networks — manage ZeroTier networks on your controllers* |
 | ![Members](docs/screenshots/members.jpg) | ![Peers](docs/screenshots/peers.jpg) |
-| *Members — authorize devices and view live status* | *Peers — view node status and peer connections* |
+| *Members — authorise devices and view live status* | *Peers — view node status and peer connections* |
 
 ![Controllers](docs/screenshots/controllers.jpg)
 *Controllers — connect to self-hosted ZeroTier instances*
@@ -50,7 +50,7 @@ A ZeroTier **controller** manages the membership and configuration of networks. 
 
 ### Member Management
 - List all members on a network with live status: IP addresses, latency, client version, last seen
-- Authorize and deauthorize members directly from the UI
+- Authorise and deauthorise members directly from the UI
 - Auto-refreshes every 60 seconds to keep member status current
 
 ### Peer Topology
@@ -185,7 +185,7 @@ Members of that team will now see the **Controllers** and **Peers** items in the
 
 ### What is a ZeroTier Controller?
 
-A ZeroTier controller is not a special piece of software — it is simply a regular ZeroTier node, the same client you would install on any machine to join a network. What makes it a controller is that the ZeroTier service exposes a local HTTP API on every node it runs on, which can be used to create and manage networks and authorize members.
+A ZeroTier controller is not a special piece of software — it is simply a regular ZeroTier node, the same client you would install on any machine to join a network. What makes it a controller is that the ZeroTier service exposes a local HTTP API on every node it runs on, which can be used to create and manage networks and authorise members.
 
 WireTier connects to that local API using a token, giving your node its controller superpowers through a shared, team-based web interface. Any machine running ZeroTier can act as a controller; you just need to point WireTier at it.
 
@@ -201,7 +201,7 @@ Once your controller is running and you have created a network in WireTier, othe
 2. Once installed, the ZeroTier icon will appear in the menu bar
 3. Click the icon and choose **Join Network...**
 4. Enter your network ID and click **Join**
-5. Approve the device in WireTier (authorize the new member on the network)
+5. Approve the device in WireTier (authorise the new member on the network)
 
 You can also join from the terminal:
 
@@ -238,7 +238,7 @@ sudo systemctl enable zerotier-one
 sudo systemctl start zerotier-one
 ```
 
-After a device joins, it will appear in WireTier's member list for that network. An Admin or Member with the appropriate permissions can then authorize it to allow full network access.
+After a device joins, it will appear in WireTier's member list for that network. An Admin or Member with the appropriate permissions can then authorise it to allow full network access.
 
 ---
 

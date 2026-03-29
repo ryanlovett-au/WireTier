@@ -863,7 +863,7 @@ new #[Title('ZeroTier Networks')] class extends Component
             </div>
             <flux:input wire:model="new_network_subnet" placeholder="or type your own…" class="mb-5" />
 
-            <flux:switch wire:model="new_network_private" label="Private Network" description="Members must be authorized to join" class="mb-6" />
+            <flux:switch wire:model="new_network_private" label="Private Network" description="Members must be authorised to join" class="mb-6" />
 
             <div class="flex justify-end space-x-2 mt-4">
                 <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>

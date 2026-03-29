@@ -123,7 +123,7 @@ class Security_Audit extends Command
     // Note: scan_global_token_loading removed — ZerotierTokens are intentionally
     // global (admin-managed). All teams share the same controller tokens.
 
-    // ─── Scan: Missing authorization on public Livewire methods ──────
+    // ─── Scan: Missing authorisation on public Livewire methods ──────
 
     private function scan_missing_authorization(): void
     {
@@ -176,7 +176,7 @@ class Security_Audit extends Command
                     continue;
                 }
 
-                // Check if method has any authorization check
+                // Check if method has any authorisation check
                 $hasAuth = false;
                 foreach ($authPatterns as $pattern) {
                     if (str_contains($body, $pattern)) {
@@ -189,10 +189,10 @@ class Security_Audit extends Command
                     $line = $this->find_line($content, "function {$method}(");
                     $this->findings[] = AuditReport::finding(
                         'high',
-                        'Authorization',
+                        'Authorisation',
                         $file,
                         $line,
-                        "{$method}() performs state-changing operations without any authorization check",
+                        "{$method}() performs state-changing operations without any authorisation check",
                         'Add isAdmin(), isTeamAdmin(), or role-based check before performing the action'
                     );
                 }

@@ -132,7 +132,7 @@ new #[Title('Network Members')] class extends Component
 
         try {
             $this->getService()->authorizeMember($this->networkId, $nodeId);
-            Flux::toast(variant: 'success', heading: 'Authorized', text: 'Member '.$nodeId.' has been authorized.');
+            Flux::toast(variant: 'success', heading: 'Authorised', text: 'Member '.$nodeId.' has been authorised.');
             AuditLog::record('member.authorized', 'member', $nodeId, ['network_id' => $this->networkId]);
             $this->loadMembers();
         } catch (Exception $e) {
@@ -149,7 +149,7 @@ new #[Title('Network Members')] class extends Component
 
         try {
             $this->getService()->deauthorizeMember($this->networkId, $nodeId);
-            Flux::toast(variant: 'warning', heading: 'Deauthorized', text: 'Member '.$nodeId.' has been deauthorized.');
+            Flux::toast(variant: 'warning', heading: 'Deauthorised', text: 'Member '.$nodeId.' has been deauthorised.');
             AuditLog::record('member.deauthorized', 'member', $nodeId, ['network_id' => $this->networkId]);
             $this->loadMembers();
         } catch (Exception $e) {
@@ -343,9 +343,9 @@ new #[Title('Network Members')] class extends Component
                             <flux:table.cell>
                                 <div class="flex gap-1">
                                     @if (! ($member['authorized'] ?? false))
-                                        <flux:button size="xs" icon="check" style="background:#16a34a;color:#fff;border-color:#16a34a;" tooltip="Authorize" wire:click="authorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
+                                        <flux:button size="xs" icon="check" style="background:#16a34a;color:#fff;border-color:#16a34a;" tooltip="Authorise" wire:click="authorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
                                     @else
-                                        <flux:button size="xs" icon="x-mark" style="background:#dc2626;color:#fff;border-color:#dc2626;" tooltip="Deauthorize" wire:click="deauthorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
+                                        <flux:button size="xs" icon="x-mark" style="background:#dc2626;color:#fff;border-color:#dc2626;" tooltip="Deauthorise" wire:click="deauthorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
                                     @endif
                                     <flux:button size="xs" icon="pencil" tooltip="Edit Member" wire:click="editMemberModal('{{ $member['address'] ?? $member['id'] }}')" />
                                     <flux:button size="xs" icon="trash" style="background:#18181b;color:#fff;border-color:#18181b;" tooltip="Delete" wire:click="confirmDeleteMember('{{ $member['address'] ?? $member['id'] }}')" />

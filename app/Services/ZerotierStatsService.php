@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Cache;
 class ZerotierStatsService
 {
     /**
-     * Get authorized member counts for all tracked networks, cached per network for 5 minutes.
+     * Get authorised member counts for all tracked networks, cached per network for 5 minutes.
      *
      * Returns ['total' => int, 'by_network' => [network_id => int]]
      */
@@ -42,7 +42,7 @@ class ZerotierStatsService
                         $service = new ZerotierService($token);
                         $members = $service->getNetworkMembers($network->network_id);
 
-                        // Count only authorized members
+                        // Count only authorised members
                         $authorized = 0;
                         foreach (array_keys($members) as $nodeId) {
                             try {

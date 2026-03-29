@@ -94,7 +94,7 @@
                 <p class="text-zinc-400 mx-auto" style="font-size:1.125rem;line-height:1.7;max-width:560px;margin-bottom:40px;">
                     A self-hosted ZeroTier controller UI built with Laravel and Livewire.<br><br>
                     Run it on your own infrastructure. WireTier gives your self-hosted ZeroTier controller
-                    a powerful web UI — manage networks, authorize members, and share access with your team.
+                    a powerful web UI — manage networks, authorise members, and share access with your team.
                 </p>
 
                 <div class="flex flex-wrap items-center justify-center gap-3">
@@ -142,7 +142,7 @@
                     @foreach ([
                         ['1', 'Install ZeroTier', 'Install the ZeroTier client on any machine. It becomes a node — and every node is already a controller waiting to be unlocked.'],
                         ['2', 'Add your token', 'Paste your ZeroTier API token into WireTier. It will automatically detect your node address and verify the connection.'],
-                        ['3', 'Manage your networks', 'Browse networks, authorize members, and share access with your team — with roles and permissions built in from the start.'],
+                        ['3', 'Manage your networks', 'Browse networks, authorise members, and share access with your team — with roles and permissions built in from the start.'],
                     ] as [$num, $title, $body])
                     <div class="rounded-2xl border border-zinc-800 bg-zinc-900" style="padding:24px;">
                         <div class="flex items-center justify-center rounded-xl bg-zinc-800 font-semibold text-orange-500" style="width:36px;height:36px;font-size:14px;margin-bottom:16px;">{{ $num }}</div>
@@ -161,7 +161,7 @@
                 <div class="text-center" style="margin-bottom:56px;">
                     <h2 class="font-semibold text-zinc-100" style="font-size:1.5rem;margin-bottom:12px;">Everything your team needs</h2>
                     <p class="text-zinc-400 mx-auto" style="max-width:560px;line-height:1.7;">
-                        From inviting teammates to authorizing devices, WireTier covers the full ZeroTier management workflow.
+                        From inviting teammates to authorising devices, WireTier covers the full ZeroTier management workflow.
                     </p>
                 </div>
 
@@ -185,7 +185,7 @@
                         ],
                         [
                             'Live member status',
-                            'See every device on a network with real-time IP, latency, version, and last-seen data. Authorize or deauthorize in one click.',
+                            'See every device on a network with real-time IP, latency, version, and last-seen data. Authorise or deauthorise in one click.',
                             '<path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0H3" />'
                         ],
                         [
