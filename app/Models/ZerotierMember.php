@@ -16,6 +16,7 @@ class ZerotierMember extends Model
         'zerotier_network_id',
         'node_id',
         'name',
+        'description',
         'authorised',
         'active_bridge',
         'no_auto_assign_ips',

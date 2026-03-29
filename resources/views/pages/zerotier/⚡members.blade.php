@@ -30,6 +30,8 @@ new #[Title('Network Members')] class extends Component
 
     public string $edit_member_name = '';
 
+    public string $edit_member_description = '';
+
     public array $edit_ip_assignments = [];
 
     public bool $edit_active_bridge = false;
@@ -107,6 +109,7 @@ new #[Title('Network Members')] class extends Component
                 ->map(fn ($m) => [
                     'address' => $m->node_id,
                     'name' => $m->name,
+                    'description' => $m->description,
                     'authorized' => $m->authorised,
                     'activeBridge' => $m->active_bridge,
                     'noAutoAssignIps' => $m->no_auto_assign_ips,
@@ -209,6 +212,7 @@ new #[Title('Network Members')] class extends Component
 
         $this->edit_member_id = $nodeId;
         $this->edit_member_name = $member->name ?? '';
+        $this->edit_member_description = $member->description ?? '';
         $this->edit_ip_assignments = $member->ip_assignments ?? [];
         $this->edit_active_bridge = $member->active_bridge;
         $this->edit_no_auto_assign = $member->no_auto_assign_ips;
@@ -238,13 +242,23 @@ new #[Title('Network Members')] class extends Component
 
         try {
             $this->getService()->updateNetworkMember($this->networkId, $this->edit_member_id, [
+                'name' => $this->edit_member_name,
                 'ipAssignments' => $this->edit_ip_assignments,
                 'activeBridge' => $this->edit_active_bridge,
                 'noAutoAssignIps' => $this->edit_no_auto_assign,
             ]);
+
+            // Save description locally (not supported by ZT API)
+            $dbNetwork = $this->getDbNetwork();
+            if ($dbNetwork) {
+                ZerotierMember::where('zerotier_network_id', $dbNetwork->id)
+                    ->where('node_id', $this->edit_member_id)
+                    ->update(['description' => $this->edit_member_description]);
+            }
+
             Flux::modal('editMemberModal')->close();
             Flux::toast(variant: 'success', heading: 'Updated', text: 'Member settings have been updated.');
-            AuditLog::record('member.updated', 'member', $this->edit_member_id, ['network_id' => $this->networkId]);
+            AuditLog::record('member.updated', 'member', $this->edit_member_id, ['network_id' => $this->networkId, 'name' => $this->edit_member_name]);
             $this->syncAndReload();
         } catch (Exception $e) {
             report($e);
@@ -316,7 +330,7 @@ new #[Title('Network Members')] class extends Component
             <flux:card>
                 <flux:table>
                     <flux:table.columns>
-                        <flux:table.column>Node ID</flux:table.column>
+                        <flux:table.column>Member</flux:table.column>
                         <flux:table.column>IP Assignments</flux:table.column>
                         <flux:table.column>Authorized</flux:table.column>
                         <flux:table.column>Bridge</flux:table.column>
@@ -327,7 +341,15 @@ new #[Title('Network Members')] class extends Component
                     <flux:table.rows>
                     @foreach ($members as $member)
                         <flux:table.row :key="$member['address'] ?? $member['id'] ?? $loop->index">
-                            <flux:table.cell class="font-mono text-xs">{{ $member['address'] ?? $member['id'] ?? '—' }}</flux:table.cell>
+                            <flux:table.cell>
+                                @if (! empty($member['name']))
+                                    <div class="text-sm font-medium">{{ $member['name'] }}</div>
+                                @endif
+                                @if (! empty($member['description']))
+                                    <div class="text-xs text-zinc-400">{{ $member['description'] }}</div>
+                                @endif
+                                <div class="font-mono text-xs text-zinc-400">{{ $member['address'] ?? '—' }}</div>
+                            </flux:table.cell>
                             <flux:table.cell class="font-mono text-xs">
                                 @foreach (($member['ipAssignments'] ?? []) as $ip)
                                     <div>{{ $ip }}</div>
@@ -410,6 +432,11 @@ new #[Title('Network Members')] class extends Component
         <flux:modal name="editMemberModal" focusable class="w-[450px]">
             <flux:heading size="lg" class="mb-4">Edit Member</flux:heading>
             <flux:subheading class="mb-4">Node: <span class="font-mono">{{ $edit_member_id }}</span></flux:subheading>
+
+            <div class="space-y-4 mb-4">
+                <flux:input wire:model="edit_member_name" label="Name" placeholder="e.g. Ryan's Laptop" />
+                <flux:textarea wire:model="edit_member_description" label="Description" placeholder="Optional notes about this device..." rows="2" />
+            </div>
 
             <div class="mb-4">
                 <flux:label>IP Assignments</flux:label>
