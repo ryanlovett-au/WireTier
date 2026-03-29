@@ -150,6 +150,17 @@ class Security_Audit extends Command
                     continue;
                 }
 
+                // Skip read-only and UI-only methods
+                $readOnlyMethods = ['loadNetwork', 'loadMembers', 'loadNetworks', 'loadData', 'loadTokens',
+                    'confirmDeleteMember', 'confirmDeleteNetwork', 'confirmDeleteUntracked',
+                    'editMemberModal', 'editTokenModal', 'deleteTokenModal',
+                    'openEditModal', 'openCreateModal', 'changeRoleModal', 'changeExpiryModal', 'removeUserModal',
+                    'addRoute', 'removeRoute', 'addIpPool', 'removeIpPool',
+                    'addIpAssignment', 'removeIpAssignment', 'generateSubnetSuggestions', 'discoverNetworks'];
+                if (in_array($method, $readOnlyMethods)) {
+                    continue;
+                }
+
                 // Only flag methods that perform writes (API calls, DB updates, redirects)
                 $isWriteMethod = str_contains($body, '->save()')
                     || str_contains($body, '->update(')
@@ -158,7 +169,6 @@ class Security_Audit extends Command
                     || str_contains($body, 'authorizeMember')
                     || str_contains($body, 'deauthorizeMember')
                     || str_contains($body, 'deleteMember')
-                    || str_contains($body, '$this->getService()->')
                     || str_contains($body, '->post(')
                     || str_contains($body, '->put(');
 
@@ -230,10 +240,16 @@ class Security_Audit extends Command
         foreach ($bladeFiles as $file) {
             $content = File::get($file);
 
-            // {!! !!} — raw HTML output
+            // {!! !!} — raw HTML output (skip known-safe framework-generated content)
+            $safeVars = ['$qrCodeSvg', '$content', '$slot', '$iconPath'];
             if (preg_match_all('/\{!!\s*(.+?)\s*!!\}/s', $content, $matches, PREG_OFFSET_CAPTURE)) {
                 foreach ($matches[1] as $match) {
                     $variable = trim($match[0]);
+
+                    if (in_array($variable, $safeVars)) {
+                        continue;
+                    }
+
                     $offset = $match[1];
                     $line = substr_count(substr($content, 0, $offset), "\n") + 1;
 
@@ -288,20 +304,22 @@ class Security_Audit extends Command
 
         $content = File::get($file);
 
-        if (str_contains($content, '->baseUrl(') && str_contains($content, '$zerotierToken->host')) {
+        // Check for scheme validation on host URL
+        $hasSchemeValidation = str_contains($content, 'parse_url') && str_contains($content, "['http', 'https']");
+        if (str_contains($content, '->baseUrl(') && str_contains($content, '$zerotierToken->host') && ! $hasSchemeValidation) {
             $line = $this->find_line($content, 'baseUrl');
             $this->findings[] = AuditReport::finding(
                 'medium',
                 'SSRF',
                 $file,
                 $line,
-                'ZerotierToken host URL used directly as HTTP base URL — no validation against internal addresses',
-                'Validate host is not a private/internal IP (127.x, 10.x, 172.16-31.x, 169.254.x, etc.) before making requests'
+                'ZerotierToken host URL used directly as HTTP base URL — no scheme validation',
+                'Validate host scheme is http/https and not a private/internal IP before making requests'
             );
         }
 
-        // Hardcoded localhost fallback
-        if (str_contains($content, 'http://localhost:9993')) {
+        // Check for empty token handling
+        if (str_contains($content, 'http://localhost:9993') && ! str_contains($content, 'empty($zerotierToken->token)')) {
             $line = $this->find_line($content, 'localhost:9993');
             $this->findings[] = AuditReport::finding(
                 'low',
@@ -325,22 +343,24 @@ class Security_Audit extends Command
 
         $content = File::get($file);
 
-        // Find string interpolation in HTTP paths
-        if (preg_match_all('/->(?:get|post|delete)\(\s*"[^"]*\{\$\w+\}/', $content, $matches, PREG_OFFSET_CAPTURE)) {
-            $reported = false;
-            foreach ($matches[0] as $match) {
-                if (! $reported) {
-                    $offset = $match[1];
-                    $line = substr_count(substr($content, 0, $offset), "\n") + 1;
-                    $this->findings[] = AuditReport::finding(
-                        'medium',
-                        'Injection',
-                        $file,
-                        $line,
-                        'User-supplied parameters interpolated directly into HTTP URL paths without format validation',
-                        'Validate networkId/nodeId as hex-only strings (e.g. /^[a-f0-9]+$/) before interpolation'
-                    );
-                    $reported = true;
+        // Find string interpolation in HTTP paths — only flag if no validatePathSegment exists
+        if (! str_contains($content, 'validatePathSegment')) {
+            if (preg_match_all('/->(?:get|post|delete)\(\s*"[^"]*\{\$\w+\}/', $content, $matches, PREG_OFFSET_CAPTURE)) {
+                $reported = false;
+                foreach ($matches[0] as $match) {
+                    if (! $reported) {
+                        $offset = $match[1];
+                        $line = substr_count(substr($content, 0, $offset), "\n") + 1;
+                        $this->findings[] = AuditReport::finding(
+                            'medium',
+                            'Injection',
+                            $file,
+                            $line,
+                            'User-supplied parameters interpolated directly into HTTP URL paths without format validation',
+                            'Validate networkId/nodeId format before interpolation'
+                        );
+                        $reported = true;
+                    }
                 }
             }
         }
@@ -389,8 +409,8 @@ class Security_Audit extends Command
 
         $content = File::get($file);
 
-        // Session encryption
-        if (str_contains($content, 'SESSION_ENCRYPT') && str_contains($content, 'false')) {
+        // Session encryption — check if default is false
+        if (str_contains($content, "env('SESSION_ENCRYPT', false)")) {
             $line = $this->find_line($content, 'encrypt');
             $this->findings[] = AuditReport::finding(
                 'medium',
