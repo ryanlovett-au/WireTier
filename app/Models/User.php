@@ -119,6 +119,6 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         $teamUser = $this->teamUser;
 
-        return $this->isAdmin() || ($teamUser && $teamUser->first()?->role === 'admin');
+        return $this->isAdmin() || ($teamUser && $teamUser->role === 'admin');
     }
 }
