@@ -122,6 +122,10 @@ new #[Title('Network Members')] class extends Component
 
     public function authorizeMember($nodeId): void
     {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
         try {
             $this->getService()->authorizeMember($this->networkId, $nodeId);
             Flux::toast(variant: 'success', heading: 'Authorized', text: 'Member '.$nodeId.' has been authorized.');
@@ -133,6 +137,10 @@ new #[Title('Network Members')] class extends Component
 
     public function deauthorizeMember($nodeId): void
     {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
         try {
             $this->getService()->deauthorizeMember($this->networkId, $nodeId);
             Flux::toast(variant: 'warning', heading: 'Deauthorized', text: 'Member '.$nodeId.' has been deauthorized.');
@@ -150,6 +158,10 @@ new #[Title('Network Members')] class extends Component
 
     public function deleteMember(): void
     {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
         try {
             $this->getService()->deleteMember($this->networkId, $this->delete_member_id);
             Flux::modal('deleteMemberModal')->close();
@@ -193,6 +205,10 @@ new #[Title('Network Members')] class extends Component
 
     public function saveMember(): void
     {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
         try {
             $this->getService()->updateNetworkMember($this->networkId, $this->edit_member_id, [
                 'ipAssignments' => $this->edit_ip_assignments,
