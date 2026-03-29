@@ -59,9 +59,20 @@
                     </div>
                 </div>
                 @php $ztLastUpdated = \Illuminate\Support\Facades\Cache::get('zt_members_last_updated'); @endphp
-                <flux:text class="text-xs text-zinc-400 mt-2">
-                    Last updated &middot; {{ $ztLastUpdated ? \Carbon\Carbon::createFromTimestamp($ztLastUpdated)->diffForHumans() : 'pending' }}
-                </flux:text>
+                <div
+                    x-data="{ ts: {{ $ztLastUpdated ?? 0 }}, label: '' }"
+                    x-init="setInterval(() => {
+                        if (!ts) { label = 'pending'; return; }
+                        let s = Math.floor(Date.now()/1000) - ts;
+                        if (s < 5) label = 'just now';
+                        else if (s < 60) label = s + 's ago';
+                        else if (s < 3600) label = Math.floor(s/60) + 'm ago';
+                        else label = Math.floor(s/3600) + 'h ago';
+                    }, 1000)"
+                    class="text-xs text-zinc-400 mt-2"
+                >
+                    Last updated &middot; <span x-text="label"></span>
+                </div>
             </flux:card>
         </div>
 
@@ -84,9 +95,20 @@
                 <flux:button size="sm" icon="arrow-down-tray" :href="route('zerotier.networks')" wire:navigate>Import</flux:button>
             </div>
             @php $untrackedUpdated = $untrackedStats['last_updated']; @endphp
-            <flux:text class="text-xs text-zinc-400 mt-2">
-                Last checked &middot; {{ $untrackedUpdated ? \Carbon\Carbon::createFromTimestamp($untrackedUpdated)->diffForHumans() : 'pending' }}
-            </flux:text>
+            <div
+                x-data="{ ts: {{ $untrackedUpdated ?? 0 }}, label: '' }"
+                x-init="setInterval(() => {
+                    if (!ts) { label = 'pending'; return; }
+                    let s = Math.floor(Date.now()/1000) - ts;
+                    if (s < 5) label = 'just now';
+                    else if (s < 60) label = s + 's ago';
+                    else if (s < 3600) label = Math.floor(s/60) + 'm ago';
+                    else label = Math.floor(s/3600) + 'h ago';
+                }, 1000)"
+                class="text-xs text-zinc-400 mt-2"
+            >
+                Last checked &middot; <span x-text="label"></span>
+            </div>
         </flux:card>
         @endif
         @endif

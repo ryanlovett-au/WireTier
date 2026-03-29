@@ -2,6 +2,7 @@
 
 use App\Models\ZerotierToken;
 use App\Services\ZerotierService;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
@@ -14,6 +15,8 @@ new #[Title('Node Status & Peers')] class extends Component
     public array $peers = [];
 
     public array $status = [];
+
+    public int $lastRefreshedAt = 0;
 
     public function mount()
     {
@@ -35,19 +38,35 @@ new #[Title('Node Status & Peers')] class extends Component
             return;
         }
 
-        $token = ZerotierToken::findOrFail($this->selectedToken);
+        $tokenId = $this->selectedToken;
+
+        $token = ZerotierToken::findOrFail($tokenId);
         $service = new ZerotierService($token);
 
-        try {
-            $this->status = $service->getStatus();
+        $this->status = Cache::flexible("zt_status_{$tokenId}", [30, 60], function () use ($service) {
+            return $service->getStatus();
+        });
+
+        $cached = Cache::flexible("zt_peers_{$tokenId}", [30, 60], function () use ($service) {
             $roleOrder = ['PLANET' => 0, 'MOON' => 1, 'LEAF' => 2];
             $peers = $service->getPeers();
             usort($peers, fn ($a, $b) => ($roleOrder[$a['role'] ?? 'LEAF'] ?? 2) <=> ($roleOrder[$b['role'] ?? 'LEAF'] ?? 2));
-            $this->peers = $peers;
-        } catch (Exception $e) {
-            report($e);
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load peers. Please try again.');
+
+            return ['peers' => $peers, 'fetched_at' => now()->timestamp];
+        });
+
+        $this->peers = $cached['peers'] ?? [];
+        $this->lastRefreshedAt = $cached['fetched_at'] ?? 0;
+    }
+
+    public function syncAndReload(): void
+    {
+        if (! empty($this->selectedToken)) {
+            Cache::forget("zt_status_{$this->selectedToken}");
+            Cache::forget("zt_peers_{$this->selectedToken}");
         }
+
+        $this->loadData();
     }
 
     public function updatedSelectedToken(): void
@@ -70,9 +89,24 @@ new #[Title('Node Status & Peers')] class extends Component
                         @endforeach
                     </flux:select>
                 @endif
-                <flux:button size="sm" icon="arrow-path" wire:click="loadData">Refresh</flux:button>
+                <flux:button size="sm" icon="arrow-path" wire:click="syncAndReload">Refresh</flux:button>
             </div>
         </div>
+        @if ($lastRefreshedAt)
+        <div
+            x-data="{ label: '' }"
+            x-init="setInterval(() => {
+                let s = Math.floor(Date.now()/1000) - $wire.lastRefreshedAt;
+                if (s < 5) label = 'just now';
+                else if (s < 60) label = s + 's ago';
+                else if (s < 3600) label = Math.floor(s/60) + 'm ago';
+                else label = Math.floor(s/3600) + 'h ago';
+            }, 1000)"
+            class="text-xs text-zinc-400 text-right -mt-4 mb-4"
+        >
+            Last refreshed &middot; <span x-text="label"></span>
+        </div>
+        @endif
 
         @if ($tokens->count() === 0)
             <flux:card>

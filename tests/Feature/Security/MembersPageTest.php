@@ -92,15 +92,16 @@ test('members page redirects when user has no team', function () {
     ])->assertRedirect('/settings/teams');
 });
 
-test('loadMembers fetches members from API', function () {
+test('loadMembers shows synced members from DB', function () {
     membersHttpFakes();
     $this->actingAs($this->alphaAdmin);
     session()->forget('current_team');
 
+    // Sync first to populate members in DB
     $component = Livewire::test('pages::zerotier.members', [
         'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
         'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
-    ]);
+    ])->call('syncAndReload');
 
     $members = $component->get('members');
     expect($members)->not->toBeEmpty();
@@ -154,15 +155,17 @@ test('deleteMember calls API to delete', function () {
     expect($tracker->called)->toBeTrue();
 });
 
-test('editMemberModal populates edit fields', function () {
+test('editMemberModal populates edit fields from DB', function () {
     membersHttpFakes();
     $this->actingAs($this->alphaAdmin);
     session()->forget('current_team');
 
+    // Sync to populate members in DB first
     $component = Livewire::test('pages::zerotier.members', [
         'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
         'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
-    ])->call('editMemberModal', 'aabb000001');
+    ])->call('syncAndReload')
+        ->call('editMemberModal', 'aabb000001');
 
     $component->assertSet('edit_member_id', 'aabb000001');
     expect($component->get('edit_ip_assignments'))->toBe(['10.0.0.2']);
