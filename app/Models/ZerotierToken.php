@@ -15,7 +15,7 @@ class ZerotierToken extends Model
 
     public $incrementing = false;
 
-    protected $guarded = [];
+    protected $fillable = ['name', 'token', 'host', 'is_active', 'node_address'];
 
     protected $hidden = ['token', 'host', 'node_address'];
 

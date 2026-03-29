@@ -15,7 +15,7 @@ class TeamUser extends Model
 
     public $incrementing = false;
 
-    protected $guarded = [];
+    protected $fillable = ['team_id', 'user_id', 'role', 'expires'];
 
     protected static function booted(): void
     {

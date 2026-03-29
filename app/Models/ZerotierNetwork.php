@@ -15,7 +15,7 @@ class ZerotierNetwork extends Model
 
     public $incrementing = false;
 
-    protected $guarded = [];
+    protected $fillable = ['team_id', 'zerotier_token_id', 'network_id', 'name', 'description', 'private', 'config'];
 
     protected static function booted(): void
     {

@@ -13,7 +13,7 @@ class TeamPermission extends Model
 
     public $incrementing = false;
 
-    protected $guarded = [];
+    protected $fillable = ['team_id', 'permission'];
 
     protected static function booted(): void
     {
