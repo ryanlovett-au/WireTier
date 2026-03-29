@@ -40,11 +40,6 @@ class Team extends Model
         return $this->hasMany(TeamPermission::class);
     }
 
-    public function zerotierTokens(): HasMany
-    {
-        return $this->hasMany(ZerotierToken::class);
-    }
-
     public function zerotierNetworks(): HasMany
     {
         return $this->hasMany(ZerotierNetwork::class);
