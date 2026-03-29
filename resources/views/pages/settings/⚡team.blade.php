@@ -187,6 +187,11 @@ new #[Title('Team Settings')] class extends Component
             $teamUser->expires = $this->invite_team_expires;
             $teamUser->save();
 
+            // Clean up any pending invitation for this email/team
+            TeamInvitation::where('email', $this->invite_team_email)
+                ->where('team_id', $this->current_team->id)
+                ->delete();
+
             Mail::to($this->invite_team_email)->queue(new TeamAddedUser($this->current_team->name, config('laratier.roles')[$this->invite_team_role]));
 
             Flux::toast(variant: 'success', heading: 'User Added', text: 'The user has been added to this team.');

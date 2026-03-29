@@ -14,15 +14,8 @@ beforeEach(function () {
 test('session encryption should be enabled for production', function () {
     $content = File::get(config_path('session.php'));
 
-    try {
-        // The default should encourage encryption
-        // Currently defaults to false
-        expect(config('session.encrypt'))->toBeTrue(
-            'Session encryption is disabled — session data stored unencrypted'
-        );
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: Session encryption is disabled — session data is stored unencrypted');
-    }
+    // Check the config file default is true (env var may override in test)
+    expect($content)->toContain("env('SESSION_ENCRYPT', true)");
 });
 
 test('session cookie should be secure in production', function () {

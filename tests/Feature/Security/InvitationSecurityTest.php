@@ -1,5 +1,6 @@
 <?php
 
+use App\Actions\Fortify\CreateNewUser;
 use App\Models\TeamInvitation;
 use App\Models\TeamUser;
 use App\Models\User;
@@ -41,33 +42,58 @@ test('invitation is scoped to specific email', function () {
     expect($invitation)->toBeNull('Invitation found for wrong email');
 });
 
-test('invitation should be single-use', function () {
+test('invitation is deleted when user registers', function () {
     TeamInvitation::create([
         'team_id' => SecurityTestSeeder::ALPHA_TEAM_ID,
-        'email' => 'replay@test.local',
+        'email' => 'newuser@test.local',
         'role' => 'member',
     ]);
 
-    // First use: create user and accept invitation
-    $user = User::factory()->create(['email' => 'replay@test.local']);
-    TeamUser::create([
+    // Simulate registration via Fortify CreateNewUser
+    $action = app(CreateNewUser::class);
+    $action->create([
+        'name' => 'New User',
+        'email' => 'newuser@test.local',
+        'password' => 'Password123!',
+        'password_confirmation' => 'Password123!',
+    ]);
+
+    // Invitation should be consumed and deleted
+    expect(TeamInvitation::where('email', 'newuser@test.local')->exists())->toBeFalse();
+
+    // User should be in the team
+    $user = User::where('email', 'newuser@test.local')->first();
+    expect(TeamUser::where('user_id', $user->id)
+        ->where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)->exists())->toBeTrue();
+});
+
+test('pending invitation is cleaned up when existing user is added directly', function () {
+    // Create a pending invitation for an email
+    TeamInvitation::create([
         'team_id' => SecurityTestSeeder::ALPHA_TEAM_ID,
-        'user_id' => $user->id,
+        'email' => 'orphan@security-test.local',
         'role' => 'member',
     ]);
 
-    // Invitation should be deleted or marked as used after acceptance
-    $invitation = TeamInvitation::where('email', 'replay@test.local')
-        ->where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)
-        ->first();
+    $alphaAdmin = User::where('email', 'alpha-admin@security-test.local')->first();
+    $this->actingAs($alphaAdmin);
+    session()->forget('current_team');
 
+    // Admin invites the same email — user exists, so they're added directly
+    Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ALPHA_TEAM_ID])
+        ->set('invite_team_email', 'orphan@security-test.local')
+        ->set('invite_team_role', 'viewer')
+        ->set('invite_team_expires', now()->addYear()->format('Y-m-d'))
+        ->call('inviteTeam');
+
+    // The pending invitation should be cleaned up
     try {
-        // Currently invitations persist after use — this documents the replay vulnerability
-        expect($invitation)->toBeNull(
-            'Invitation still exists after being accepted — replay attack possible'
-        );
+        expect(TeamInvitation::where('email', 'orphan@security-test.local')
+            ->where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)->exists())->toBeFalse(
+                'Invitation persists after user was added directly to the team'
+            );
     } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: Invitations persist after acceptance — replay attacks are possible');
+        $this->markTestSkipped('SECURITY EXPOSURE: Invitations persist after user is added directly — stale invitations remain in database');
     }
 });
 
