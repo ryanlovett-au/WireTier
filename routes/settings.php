@@ -4,13 +4,13 @@ use App\Models\Team;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'throttle:60,1'])->group(function () {
     Route::redirect('settings', 'settings/profile');
 
     Route::livewire('settings/profile', 'pages::settings.profile')->name('profile.edit');
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', 'throttle:60,1'])->group(function () {
     Route::livewire('settings/appearance', 'pages::settings.appearance')->name('appearance.edit');
 
     Route::livewire('settings/security', 'pages::settings.security')
@@ -39,6 +39,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         $user->save();
         session()->forget('current_team');
 
-        return redirect()->back();
+        return redirect()->route('dashboard');
     })->name('teams.switch');
 });

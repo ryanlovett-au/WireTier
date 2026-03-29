@@ -78,6 +78,10 @@ new #[Title('ZeroTier Controllers')] class extends Component
 
     public function testToken($tokenId): void
     {
+        if (! auth()->user()->isAdmin()) {
+            return;
+        }
+
         $token = ZerotierToken::findOrFail($tokenId);
         $service = new ZerotierService($token);
         $result = $service->testConnection();
@@ -96,6 +100,10 @@ new #[Title('ZeroTier Controllers')] class extends Component
 
     public function toggleToken($tokenId): void
     {
+        if (! auth()->user()->isAdmin()) {
+            return;
+        }
+
         $token = ZerotierToken::findOrFail($tokenId);
         $token->is_active = ! $token->is_active;
         $token->save();
@@ -113,6 +121,10 @@ new #[Title('ZeroTier Controllers')] class extends Component
 
     public function updateToken(): void
     {
+        if (! auth()->user()->isAdmin()) {
+            return;
+        }
+
         $this->validate([
             'edit_name' => 'required|string|max:255',
             'edit_host' => 'required|url',
@@ -138,6 +150,10 @@ new #[Title('ZeroTier Controllers')] class extends Component
 
     public function deleteToken(): void
     {
+        if (! auth()->user()->isAdmin()) {
+            return;
+        }
+
         $networkCount = ZerotierNetwork::where('zerotier_token_id', $this->delete_id)->count();
 
         if ($networkCount > 0) {

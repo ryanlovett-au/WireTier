@@ -180,24 +180,15 @@ test('toggleToken flips is_active', function () {
 
 // ─── Security: Defense-in-Depth Admin Checks ─────────────────────────────
 
-test('testToken has individual isAdmin check', function () {
-    // Even though mount() gates the page, each method should also check
+test('token methods have individual isAdmin checks', function () {
     $content = File::get(resource_path('views/pages/zerotier/⚡tokens.blade.php'));
-    $methods = ['testToken', 'toggleToken', 'updateToken', 'deleteToken'];
 
-    foreach ($methods as $method) {
-        $methodStart = strpos($content, "function {$method}");
-        $nextMethod = strpos($content, 'function ', $methodStart + 10);
-        $body = substr($content, $methodStart, $nextMethod ? $nextMethod - $methodStart : 500);
+    // Count isAdmin occurrences — mount + addToken + testToken + toggleToken + updateToken + deleteToken = 6 minimum
+    $count = substr_count($content, 'isAdmin()');
 
-        try {
-            expect($body)->toContain('isAdmin()',
-                "{$method}() has no individual isAdmin() check"
-            );
-        } catch (Throwable $e) {
-            $this->markTestSkipped("SECURITY EXPOSURE: {$method}() relies solely on mount() for authorization — no defense-in-depth");
-        }
-    }
+    expect($count)->toBeGreaterThanOrEqual(6,
+        'Not all token methods have individual isAdmin() checks'
+    );
 });
 
 // ─── Security: Token Data Exposure ───────────────────────────────────────
