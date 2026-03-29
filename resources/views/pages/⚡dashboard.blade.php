@@ -1,5 +1,58 @@
-<x-layouts::app :title="__('Dashboard')">
-    <div class="flex h-full w-full flex-1 flex-col gap-4 rounded-xl p-6">
+<?php
+
+use App\Models\ZerotierNetwork;
+use App\Services\ZerotierStatsService;
+use Livewire\Attributes\Computed;
+use Livewire\Attributes\Title;
+use Livewire\Component;
+
+new #[Title('Dashboard')] class extends Component
+{
+    #[Computed]
+    public function ztStats()
+    {
+        if (! auth()->user()->team) {
+            return ['total' => 0, 'by_network' => [], 'last_updated' => null];
+        }
+
+        return ZerotierStatsService::authorisedMembers(auth()->user()->team->id);
+    }
+
+    #[Computed]
+    public function untrackedStats()
+    {
+        if (! auth()->user()->isAdmin()) {
+            return ['count' => 0, 'last_updated' => null];
+        }
+
+        return ZerotierStatsService::untrackedNetworks();
+    }
+
+    #[Computed]
+    public function recentNetworks()
+    {
+        if (! auth()->user()->team) {
+            return collect();
+        }
+
+        return ZerotierNetwork::where('team_id', auth()->user()->team->id)
+            ->latest()
+            ->take(5)
+            ->get();
+    }
+
+    #[Computed]
+    public function networkCount()
+    {
+        if (! auth()->user()->team) {
+            return 0;
+        }
+
+        return ZerotierNetwork::where('team_id', auth()->user()->team->id)->count();
+    }
+}; ?>
+
+<div class="flex h-full w-full flex-1 flex-col gap-4 rounded-xl p-6" wire:poll.30s>
         <div class="mb-4">
             <flux:heading size="xl">Dashboard</flux:heading>
             <flux:subheading>
@@ -12,9 +65,6 @@
         </div>
 
         @if (auth()->user()->team)
-        @php
-            $ztStats = \App\Services\ZerotierStatsService::authorisedMembers(auth()->user()->team->id);
-        @endphp
         <div class="grid auto-rows-min gap-4 md:grid-cols-3">
             {{-- Networks Count --}}
             <flux:card>
@@ -23,25 +73,20 @@
                         <flux:icon name="globe-alt" class="size-5" />
                     </div>
                     <div>
-                        <flux:heading size="lg">
-                            {{ \App\Models\ZerotierNetwork::where('team_id', auth()->user()->team->id)->count() }}
-                        </flux:heading>
+                        <flux:heading size="lg">{{ $this->networkCount }}</flux:heading>
                         <flux:subheading>Networks</flux:subheading>
                     </div>
                 </div>
             </flux:card>
 
-
-{{-- Team Members Count --}}
+            {{-- Team Members Count --}}
             <flux:card>
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-full bg-purple-400/20 text-purple-600 flex items-center justify-center">
                         <flux:icon name="users" class="size-5" />
                     </div>
                     <div>
-                        <flux:heading size="lg">
-                            {{ auth()->user()->team->countUsers() }}
-                        </flux:heading>
+                        <flux:heading size="lg">{{ auth()->user()->team->countUsers() }}</flux:heading>
                         <flux:subheading>Team Members</flux:subheading>
                     </div>
                 </div>
@@ -54,13 +99,14 @@
                         <flux:icon name="cpu-chip" class="size-5" />
                     </div>
                     <div>
-                        <flux:heading size="lg">{{ $ztStats['total'] }}</flux:heading>
+                        <flux:heading size="lg">{{ $this->ztStats['total'] }}</flux:heading>
                         <flux:subheading>Authorised Devices</flux:subheading>
                     </div>
                 </div>
                 <div
-                    x-data="{ ts: {{ $ztStats['last_updated'] ?? 0 }}, label: '' }"
+                    x-data="{ label: '' }"
                     x-init="setInterval(() => {
+                        let ts = {{ $this->ztStats['last_updated'] ?? 0 }};
                         if (!ts) { label = 'pending'; return; }
                         let s = Math.floor(Date.now()/1000) - ts;
                         if (s < 5) label = 'just now';
@@ -75,11 +121,7 @@
             </flux:card>
         </div>
 
-        @if (auth()->user()->isAdmin())
-        @php
-            $untrackedStats = \App\Services\ZerotierStatsService::untrackedNetworks();
-        @endphp
-        @if ($untrackedStats['count'] > 0)
+        @if (auth()->user()->isAdmin() && $this->untrackedStats['count'] > 0)
         <flux:card class="border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
@@ -87,16 +129,16 @@
                         <flux:icon name="exclamation-triangle" class="size-5" />
                     </div>
                     <div>
-                        <flux:heading size="lg">{{ $untrackedStats['count'] }}</flux:heading>
+                        <flux:heading size="lg">{{ $this->untrackedStats['count'] }}</flux:heading>
                         <flux:subheading>Untracked Network(s)</flux:subheading>
                     </div>
                 </div>
                 <flux:button size="sm" icon="arrow-down-tray" :href="route('zerotier.networks')" wire:navigate>Import</flux:button>
             </div>
-            @php $untrackedUpdated = $untrackedStats['last_updated']; @endphp
             <div
-                x-data="{ ts: {{ $untrackedUpdated ?? 0 }}, label: '' }"
+                x-data="{ label: '' }"
                 x-init="setInterval(() => {
+                    let ts = {{ $this->untrackedStats['last_updated'] ?? 0 }};
                     if (!ts) { label = 'pending'; return; }
                     let s = Math.floor(Date.now()/1000) - ts;
                     if (s < 5) label = 'just now';
@@ -109,7 +151,6 @@
                 Last checked &middot; <span x-text="label"></span>
             </div>
         </flux:card>
-        @endif
         @endif
 
         <div class="grid gap-4 md:grid-cols-2">
@@ -137,16 +178,9 @@
             {{-- Recent Networks --}}
             <flux:card>
                 <flux:heading class="mb-4">Tracked Networks</flux:heading>
-                @php
-                    $recentNetworks = \App\Models\ZerotierNetwork::where('team_id', auth()->user()->team->id)
-                        ->latest()
-                        ->take(5)
-                        ->get();
-                @endphp
-
-                @if ($recentNetworks->count() > 0)
+                @if ($this->recentNetworks->count() > 0)
                     <div class="space-y-3">
-                        @foreach ($recentNetworks as $network)
+                        @foreach ($this->recentNetworks as $network)
                             <div class="flex items-center justify-between">
                                 <div>
                                     <div class="font-medium text-sm">{{ $network->name ?? 'Unnamed' }}</div>
@@ -164,7 +198,7 @@
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <flux:badge color="zinc" size="sm">
-                                        {{ $ztStats['by_network'][$network->network_id] ?? 0 }} members
+                                        {{ $this->ztStats['by_network'][$network->network_id] ?? 0 }} members
                                     </flux:badge>
                                     @if ($network->private)
                                         <flux:badge color="green" size="sm">Private</flux:badge>
@@ -191,4 +225,4 @@
             </flux:card>
         @endif
     </div>
-</x-layouts::app>
+</div>
