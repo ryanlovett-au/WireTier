@@ -18,6 +18,8 @@ new #[Title('Node Status & Peers')] class extends Component
 
     public int $lastRefreshedAt = 0;
 
+    public string $selectedTokenName = '';
+
     public function mount()
     {
         if (! auth()->user()->isAdmin()) {
@@ -41,6 +43,7 @@ new #[Title('Node Status & Peers')] class extends Component
         $tokenId = $this->selectedToken;
 
         $token = ZerotierToken::findOrFail($tokenId);
+        $this->selectedTokenName = $token->name;
         $service = new ZerotierService($token);
 
         $this->status = Cache::flexible("zt_status_{$tokenId}", [30, 60], function () use ($service) {
@@ -79,7 +82,13 @@ new #[Title('Node Status & Peers')] class extends Component
         <div class="flex items-center justify-between mb-6">
             <div>
                 <flux:heading size="xl">Node Status & Peers</flux:heading>
-                <flux:subheading>View the local ZeroTier node status and connected peers.</flux:subheading>
+                <flux:subheading>
+                    @if ($selectedTokenName)
+                        Controller: <strong>{{ $selectedTokenName }}</strong>
+                    @else
+                        View the local ZeroTier node status and connected peers.
+                    @endif
+                </flux:subheading>
             </div>
             <div class="flex items-center gap-3">
                 @if ($tokens->count() > 1)
