@@ -65,6 +65,32 @@
             </flux:card>
         </div>
 
+        @if (auth()->user()->isAdmin())
+        @php
+            $untrackedStats = \App\Services\ZerotierStatsService::untrackedNetworks();
+        @endphp
+        @if ($untrackedStats['count'] > 0)
+        <flux:card class="border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-amber-400/20 text-amber-600 flex items-center justify-center">
+                        <flux:icon name="exclamation-triangle" class="size-5" />
+                    </div>
+                    <div>
+                        <flux:heading size="lg">{{ $untrackedStats['count'] }}</flux:heading>
+                        <flux:subheading>Untracked Network(s)</flux:subheading>
+                    </div>
+                </div>
+                <flux:button size="sm" icon="arrow-down-tray" :href="route('zerotier.networks')" wire:navigate>Import</flux:button>
+            </div>
+            @php $untrackedUpdated = $untrackedStats['last_updated']; @endphp
+            <flux:text class="text-xs text-zinc-400 mt-2">
+                Last checked &middot; {{ $untrackedUpdated ? \Carbon\Carbon::createFromTimestamp($untrackedUpdated)->diffForHumans() : 'pending' }}
+            </flux:text>
+        </flux:card>
+        @endif
+        @endif
+
         <div class="grid gap-4 md:grid-cols-2">
             {{-- Quick Actions --}}
             <flux:card>
