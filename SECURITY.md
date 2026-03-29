@@ -267,3 +267,7 @@ Add to your CI pipeline:
 ```
 
 The audit command exits with code 1 on any HIGH or CRITICAL finding, failing the pipeline.
+
+## Reporting Vulnerabilities
+
+If you discover a security vulnerability, please report it by [opening a GitHub issue](../../issues/new). Include as much detail as possible: steps to reproduce, affected components, and potential impact. We will review and respond to reports promptly.
