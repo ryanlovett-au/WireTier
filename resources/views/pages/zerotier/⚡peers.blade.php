@@ -1,14 +1,18 @@
 <?php
 
-use Livewire\Attributes\Title;
-use Livewire\Component;
 use App\Models\ZerotierToken;
 use App\Services\ZerotierService;
+use Livewire\Attributes\Title;
+use Livewire\Component;
 
-new #[Title('Node Status & Peers')] class extends Component {
+new #[Title('Node Status & Peers')] class extends Component
+{
     public $tokens;
+
     public string $selectedToken = '';
+
     public array $peers = [];
+
     public array $status = [];
 
     public function mount()
@@ -40,8 +44,9 @@ new #[Title('Node Status & Peers')] class extends Component {
             $peers = $service->getPeers();
             usort($peers, fn ($a, $b) => ($roleOrder[$a['role'] ?? 'LEAF'] ?? 2) <=> ($roleOrder[$b['role'] ?? 'LEAF'] ?? 2));
             $this->peers = $peers;
-        } catch (\Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load peers: '.$e->getMessage());
+        } catch (Exception $e) {
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load peers. Please try again.');
         }
     }
 

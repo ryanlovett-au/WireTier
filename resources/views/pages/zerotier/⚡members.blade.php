@@ -67,7 +67,8 @@ new #[Title('Network Members')] class extends Component
         try {
             $this->network = $this->getService()->getControllerNetwork($this->networkId);
         } catch (Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load network: '.$e->getMessage());
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load network. Please try again.');
         }
     }
 
@@ -116,7 +117,8 @@ new #[Title('Network Members')] class extends Component
                 }
             }
         } catch (Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load members: '.$e->getMessage());
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load members. Please try again.');
         }
     }
 
@@ -131,7 +133,8 @@ new #[Title('Network Members')] class extends Component
             Flux::toast(variant: 'success', heading: 'Authorized', text: 'Member '.$nodeId.' has been authorized.');
             $this->loadMembers();
         } catch (Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: $e->getMessage());
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
         }
     }
 
@@ -146,7 +149,8 @@ new #[Title('Network Members')] class extends Component
             Flux::toast(variant: 'warning', heading: 'Deauthorized', text: 'Member '.$nodeId.' has been deauthorized.');
             $this->loadMembers();
         } catch (Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: $e->getMessage());
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
         }
     }
 
@@ -169,7 +173,8 @@ new #[Title('Network Members')] class extends Component
             $this->delete_member_id = '';
             $this->loadMembers();
         } catch (Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: $e->getMessage());
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
         }
     }
 
@@ -185,7 +190,8 @@ new #[Title('Network Members')] class extends Component
             $this->new_ip = '';
             Flux::modal('editMemberModal')->show();
         } catch (Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: $e->getMessage());
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
         }
     }
 
@@ -219,7 +225,8 @@ new #[Title('Network Members')] class extends Component
             Flux::toast(variant: 'success', heading: 'Updated', text: 'Member settings have been updated.');
             $this->loadMembers();
         } catch (Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: $e->getMessage());
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
         }
     }
 }; ?>

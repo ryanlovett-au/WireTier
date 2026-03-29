@@ -246,6 +246,7 @@ new #[Title('ZeroTier Networks')] class extends Component
                 Flux::toast(variant: 'success', heading: 'All Synced', text: 'All networks on this controller are already tracked.');
             }
         } catch (Exception $e) {
+            report($e);
             Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to discover networks.');
         }
     }
@@ -286,6 +287,7 @@ new #[Title('ZeroTier Networks')] class extends Component
             Flux::toast(variant: 'success', heading: 'Imported', text: "Network {$networkId} has been assigned.");
             $this->loadNetworks();
         } catch (Exception $e) {
+            report($e);
             Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to import network.');
         }
     }
@@ -321,6 +323,7 @@ new #[Title('ZeroTier Networks')] class extends Component
             $this->delete_untracked_id = '';
             $this->delete_untracked_name = '';
         } catch (Exception $e) {
+            report($e);
             Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to delete network from controller.');
         }
     }
@@ -383,7 +386,8 @@ new #[Title('ZeroTier Networks')] class extends Component
             $this->new_network_name = '';
             $this->loadNetworks();
         } catch (Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to create network: '.$e->getMessage());
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to create network. Please try again.');
         }
     }
 
@@ -412,7 +416,8 @@ new #[Title('ZeroTier Networks')] class extends Component
 
             Flux::modal('editNetworkModal')->show();
         } catch (Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load network: '.$e->getMessage());
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to load network. Please try again.');
         }
     }
 
@@ -493,7 +498,8 @@ new #[Title('ZeroTier Networks')] class extends Component
             Flux::modal('editNetworkModal')->close();
             $this->loadNetworks();
         } catch (Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to save: '.$e->getMessage());
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to save network. Please try again.');
         }
     }
 
@@ -530,7 +536,8 @@ new #[Title('ZeroTier Networks')] class extends Component
             $this->delete_network_name = '';
             $this->loadNetworks();
         } catch (Exception $e) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to delete network: '.$e->getMessage());
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to delete network. Please try again.');
         }
     }
 }; ?>
