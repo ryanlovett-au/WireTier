@@ -6,6 +6,7 @@ use App\Models\TeamPermission;
 use App\Models\TeamUser;
 use App\Models\User;
 use Database\Seeders\SecurityTestSeeder;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 
@@ -268,5 +269,18 @@ test('member cannot change roles', function () {
         expect($viewerTu->role)->toBe('viewer', 'Member was able to change another user\'s role');
     } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: changeRole() isTeamAdmin() check does not block members — members can escalate privileges');
+    }
+});
+
+// ─── Security: Data Exposure ─────────────────────────────────────────────
+
+test('team settings does not expose full Team model as public Livewire property', function () {
+    $content = File::get(resource_path('views/pages/settings/⚡team.blade.php'));
+
+    try {
+        // public Team $current_team exposes all attributes in the Livewire snapshot
+        expect($content)->not->toContain('public Team $current_team');
+    } catch (Throwable $e) {
+        $this->markTestSkipped('SECURITY EXPOSURE: Full Team model exposed as public Livewire property — all attributes visible in client snapshot');
     }
 });

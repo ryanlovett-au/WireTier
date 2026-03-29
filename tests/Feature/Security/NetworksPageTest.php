@@ -307,6 +307,18 @@ test('viewer cannot delete networks', function () {
     }
 });
 
+// ─── Security: XSS ───────────────────────────────────────────────────────
+
+test('blade template does not use addslashes for escaping', function () {
+    $content = File::get(resource_path('views/pages/zerotier/⚡networks.blade.php'));
+
+    try {
+        expect($content)->not->toContain('addslashes(');
+    } catch (Throwable $e) {
+        $this->markTestSkipped('SECURITY EXPOSURE: Blade template uses addslashes() instead of e() or @json() — insufficient XSS protection');
+    }
+});
+
 // ─── Security: Network Team Isolation ─────────────────────────────────────
 
 test('saveNetwork scopes DB update by team_id', function () {

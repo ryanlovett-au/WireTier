@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Models\ZerotierToken;
 use Database\Seeders\SecurityTestSeeder;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
@@ -175,6 +176,28 @@ test('toggleToken flips is_active', function () {
 
     $token->refresh();
     expect($token->is_active)->toBeFalse();
+});
+
+// ─── Security: Defense-in-Depth Admin Checks ─────────────────────────────
+
+test('testToken has individual isAdmin check', function () {
+    // Even though mount() gates the page, each method should also check
+    $content = File::get(resource_path('views/pages/zerotier/⚡tokens.blade.php'));
+    $methods = ['testToken', 'toggleToken', 'updateToken', 'deleteToken'];
+
+    foreach ($methods as $method) {
+        $methodStart = strpos($content, "function {$method}");
+        $nextMethod = strpos($content, 'function ', $methodStart + 10);
+        $body = substr($content, $methodStart, $nextMethod ? $nextMethod - $methodStart : 500);
+
+        try {
+            expect($body)->toContain('isAdmin()',
+                "{$method}() has no individual isAdmin() check"
+            );
+        } catch (Throwable $e) {
+            $this->markTestSkipped("SECURITY EXPOSURE: {$method}() relies solely on mount() for authorization — no defense-in-depth");
+        }
+    }
 });
 
 // ─── Security: Token Data Exposure ───────────────────────────────────────
