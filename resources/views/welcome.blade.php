@@ -32,7 +32,7 @@
             </a>
             <nav class="flex items-center gap-3">
                 @if($promo)
-                    <a href="https://github.com/ryanlovett/wiretier" target="_blank"
+                    <a href="https://github.com/ryanlovett-au/wiretier" target="_blank"
                        class="text-sm font-medium text-white rounded-lg bg-orange-500 hover:bg-orange-600 transition-colors no-underline"
                        style="padding:6px 16px;">
                         View on GitHub
@@ -99,7 +99,7 @@
 
                 <div class="flex flex-wrap items-center justify-center gap-3">
                     @if($promo)
-                        <a href="https://github.com/ryanlovett/wiretier" target="_blank"
+                        <a href="https://github.com/ryanlovett-au/wiretier" target="_blank"
                            class="inline-flex items-center font-medium text-white rounded-xl bg-orange-500 hover:bg-orange-600 transition-colors no-underline"
                            style="padding:12px 28px;box-shadow:0 4px 16px rgba(249,115,22,0.25);">
                             View on GitHub
@@ -228,7 +228,7 @@
                 </p>
                 <div class="flex flex-wrap items-center justify-center gap-3">
                     @if($promo)
-                        <a href="https://github.com/ryanlovett/wiretier" target="_blank"
+                        <a href="https://github.com/ryanlovett-au/wiretier" target="_blank"
                            class="inline-flex items-center font-medium text-white rounded-xl bg-orange-500 hover:bg-orange-600 transition-colors no-underline"
                            style="padding:12px 28px;box-shadow:0 4px 16px rgba(249,115,22,0.25);">
                             View on GitHub
@@ -245,7 +245,7 @@
                            style="padding:12px 28px;box-shadow:0 4px 16px rgba(249,115,22,0.25);">
                             Create an account
                         </a>
-                        <a href="https://github.com/ryanlovett/wiretier" target="_blank"
+                        <a href="https://github.com/ryanlovett-au/wiretier" target="_blank"
                            class="inline-flex items-center font-medium text-zinc-100 rounded-xl border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 transition-colors no-underline"
                            style="padding:12px 28px;">
                             View on GitHub
@@ -269,7 +269,7 @@
             <div class="flex items-center gap-5 text-zinc-500" style="font-size:14px;">
                 <a href="https://www.zerotier.com/" target="_blank" class="hover:text-zinc-300 transition-colors no-underline">ZeroTier</a>
                 <a href="https://laravel.com" target="_blank" class="hover:text-zinc-300 transition-colors no-underline">Laravel</a>
-                <a href="https://github.com/ryanlovett/wiretier" target="_blank" class="hover:text-zinc-300 transition-colors no-underline">GitHub</a>
+                <a href="https://github.com/ryanlovett-au/wiretier" target="_blank" class="hover:text-zinc-300 transition-colors no-underline">GitHub</a>
                 <span>GPL-3.0</span>
             </div>
         </div>
