@@ -407,7 +407,7 @@ new #[Title('Network Members')] class extends Component
                             </flux:table.cell>
                             <flux:table.cell>
                                 @if ($member['_online'] ?? false)
-                                    <span style="color:#16a34a;font-weight:600;">Online</span>
+                                    <flux:badge color="green" size="sm">Online</flux:badge>
                                 @else
                                     @php
                                         $lastOnlineSec = ($member['lastOnline'] ?? 0) / 1000;
