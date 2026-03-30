@@ -173,6 +173,9 @@ new #[Title('ZeroTier Networks')] class extends Component
     {
         if (! empty($this->selectedToken)) {
             ZerotierSyncService::syncToken($this->selectedToken);
+
+            $teamId = auth()->user()->team->id;
+            Cache::forget("team_{$teamId}_networks_{$this->selectedToken}");
         }
 
         $this->loadNetworks();

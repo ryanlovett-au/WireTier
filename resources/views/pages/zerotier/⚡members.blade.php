@@ -167,6 +167,7 @@ new #[Title('Network Members')] class extends Component
 
         if ($dbNetwork) {
             ZerotierSyncService::syncNetwork($dbNetwork);
+            Cache::forget("network_{$dbNetwork->id}_members");
         }
 
         $this->loadNetwork();
