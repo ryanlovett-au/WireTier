@@ -688,11 +688,11 @@ new #[Title('ZeroTier Networks')] class extends Component
                                 @if (($network['_pending_count'] ?? 0) > 0)
                                     <flux:badge color="orange" size="sm">{{ $network['_pending_count'] }} pending</flux:badge>
                                 @endif
-                                @if (! empty($network['routes']))
-                                    @foreach ($network['routes'] as $route)
-                                        <span class="font-mono">{{ $route['target'] ?? '' }}</span>
-                                    @endforeach
-                                @endif
+                                @foreach (($network['routes'] ?? []) as $route)
+                                    @if (empty($route['via']))
+                                        <span class="font-mono">{{ $route['target'] }}</span>
+                                    @endif
+                                @endforeach
                             </div>
                         </div>
                         <div class="flex gap-2">
