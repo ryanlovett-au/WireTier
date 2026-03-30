@@ -40,6 +40,39 @@ new #[Title('Network Members')] class extends Component
 
     public string $new_ip = '';
 
+    public string $sortBy = '';
+
+    public string $sortDirection = 'asc';
+
+    public function sort(string $column): void
+    {
+        if ($this->sortBy === $column) {
+            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortBy = $column;
+            $this->sortDirection = 'asc';
+        }
+    }
+
+    public function getSortedMembers(): array
+    {
+        if (empty($this->sortBy)) {
+            return $this->members;
+        }
+
+        $sorted = collect($this->members)->sortBy(function ($member) {
+            return match ($this->sortBy) {
+                'name' => strtolower($member['name'] ?? ''),
+                'ip' => ip2long($member['ipAssignments'][0] ?? '0.0.0.0'),
+                'authorised' => $member['authorized'] ?? false,
+                'last_seen' => $member['_online'] ?? false ? PHP_INT_MAX : ($member['lastOnline'] ?? 0),
+                default => '',
+            };
+        }, descending: $this->sortDirection === 'desc');
+
+        return $sorted->values()->toArray();
+    }
+
     public function mount(string $networkId, string $tokenId)
     {
         if (! auth()->user()->team) {
@@ -295,11 +328,11 @@ new #[Title('Network Members')] class extends Component
                     @if ($pending > 0)
                         <flux:badge color="orange" size="sm">{{ $pending }} pending</flux:badge>
                     @endif
-                    @if (! empty($network['routes']))
-                        @foreach ($network['routes'] as $route)
-                            <span class="font-mono text-sm text-zinc-400">{{ $route['target'] ?? '' }}</span>
-                        @endforeach
-                    @endif
+                    @foreach (($network['routes'] ?? []) as $route)
+                        @if (empty($route['via']))
+                            <span class="font-mono text-sm text-zinc-400">{{ $route['target'] }}</span>
+                        @endif
+                    @endforeach
                 </div>
             </div>
             <flux:button size="sm" icon="arrow-path" wire:click="syncAndReload">Refresh</flux:button>
@@ -332,16 +365,16 @@ new #[Title('Network Members')] class extends Component
             <flux:card>
                 <flux:table>
                     <flux:table.columns>
-                        <flux:table.column>Member</flux:table.column>
-                        <flux:table.column>IP Assignments</flux:table.column>
-                        <flux:table.column>Authorized</flux:table.column>
+                        <flux:table.column sortable :sorted="$sortBy === 'name'" :direction="$sortDirection" wire:click="sort('name')">Member</flux:table.column>
+                        <flux:table.column sortable :sorted="$sortBy === 'ip'" :direction="$sortDirection" wire:click="sort('ip')">IP Assignments</flux:table.column>
+                        <flux:table.column sortable :sorted="$sortBy === 'authorised'" :direction="$sortDirection" wire:click="sort('authorised')">Authorised</flux:table.column>
                         <flux:table.column>Bridge</flux:table.column>
-                        <flux:table.column>Last Seen</flux:table.column>
+                        <flux:table.column sortable :sorted="$sortBy === 'last_seen'" :direction="$sortDirection" wire:click="sort('last_seen')">Last Seen</flux:table.column>
                         <flux:table.column>Version / IP / Latency</flux:table.column>
                         <flux:table.column>Actions</flux:table.column>
                     </flux:table.columns>
                     <flux:table.rows>
-                    @foreach ($members as $member)
+                    @foreach ($this->getSortedMembers() as $member)
                         <flux:table.row :key="$member['address'] ?? $member['id'] ?? $loop->index">
                             <flux:table.cell>
                                 @if (! empty($member['name']))
