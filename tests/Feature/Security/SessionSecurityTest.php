@@ -121,7 +121,7 @@ test('livewire update endpoint requires authentication', function () {
 });
 
 test('livewire update endpoint is protected via setUpdateRoute', function () {
-    $content = File::get(base_path('bootstrap/app.php'));
+    $content = File::get(app_path('Providers/AppServiceProvider.php'));
 
     $hasProtectedUpdate = str_contains($content, 'setUpdateRoute')
         && str_contains($content, "'auth'");
