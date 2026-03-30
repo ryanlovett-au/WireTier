@@ -179,7 +179,7 @@ new #[Title('Audit Log')] class extends Component
                 </flux:table.columns>
                 <flux:table.rows>
                     @foreach ($this->logs as $log)
-                        <flux:table.row>
+                        <flux:table.row wire:key="log-{{ $log->id }}">
                             <flux:table.cell class="text-xs text-zinc-500 whitespace-nowrap">
                                 {{ $log->created_at->format('d M Y H:i') }}
                             </flux:table.cell>

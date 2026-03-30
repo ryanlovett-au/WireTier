@@ -444,7 +444,7 @@ new #[Title('Network Members')] class extends Component
                 <flux:label>IP Assignments</flux:label>
                 <div class="space-y-2 mt-2">
                     @foreach ($edit_ip_assignments as $index => $ip)
-                        <div class="flex items-center gap-2">
+                        <div wire:key="ip-{{ $index }}" class="flex items-center gap-2">
                             <span class="font-mono text-sm flex-1">{{ $ip }}</span>
                             <flux:button size="xs" icon="x-mark" variant="danger" wire:click="removeIpAssignment({{ $index }})" />
                         </div>

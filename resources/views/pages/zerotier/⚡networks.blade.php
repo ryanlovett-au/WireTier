@@ -611,7 +611,7 @@ new #[Title('ZeroTier Networks')] class extends Component
                     </flux:table.columns>
                     <flux:table.rows>
                         @foreach ($untracked_networks as $uNetwork)
-                        <flux:table.row>
+                        <flux:table.row wire:key="untracked-{{ $uNetwork['nwid'] }}">
                             <flux:table.cell class="font-mono text-xs">{{ $uNetwork['nwid'] }}</flux:table.cell>
                             <flux:table.cell>{{ $uNetwork['name'] ?: '—' }}</flux:table.cell>
                             <flux:table.cell>
@@ -661,7 +661,7 @@ new #[Title('ZeroTier Networks')] class extends Component
         @else
             <div class="grid gap-4">
                 @foreach ($networks as $network)
-                <flux:card>
+                <flux:card wire:key="network-{{ $network['nwid'] ?? $network['id'] }}">
                     <div class="flex items-end justify-between">
                         <div>
                             <div class="flex items-center gap-3">
@@ -740,7 +740,7 @@ new #[Title('ZeroTier Networks')] class extends Component
                 @if (count($edit_ip_pools) > 0)
                     <div class="space-y-2 mb-5">
                         @foreach ($edit_ip_pools as $i => $pool)
-                            <div class="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                            <div wire:key="pool-{{ $i }}" class="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
                                 <flux:icon name="circle-stack" class="size-4 text-zinc-400 shrink-0" />
                                 <span class="font-mono text-sm flex-1">{{ $pool['ipRangeStart'] }} &rarr; {{ $pool['ipRangeEnd'] }}</span>
                                 <flux:button size="xs" icon="x-mark" variant="ghost" wire:click="removeIpPool({{ $i }})" />
@@ -776,7 +776,7 @@ new #[Title('ZeroTier Networks')] class extends Component
                         </thead>
                         <tbody>
                             @foreach ($edit_routes as $i => $route)
-                                <tr class="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
+                                <tr wire:key="route-{{ $i }}" class="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
                                     <td class="py-2.5 px-2">
                                         <flux:icon name="arrow-right-circle" class="size-4 text-zinc-400" />
                                     </td>
