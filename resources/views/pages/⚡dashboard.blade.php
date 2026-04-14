@@ -183,7 +183,7 @@ new #[Title('Dashboard')] class extends Component
                         @foreach ($this->recentNetworks as $network)
                             <div class="flex items-center justify-between">
                                 <div>
-                                    <div class="font-medium text-sm">{{ $network->name ?? 'Unnamed' }}</div>
+                                    <a href="{{ route('zerotier.members', ['networkId' => $network->network_id, 'tokenId' => $network->zerotier_token_id]) }}" class="font-medium text-sm hover:underline text-accent" wire:navigate>{{ $network->name ?? 'Unnamed' }}</a>
                                     <div class="text-xs text-zinc-500 font-mono flex items-center gap-1">
                                         {{ $network->network_id }}
                                         <span
