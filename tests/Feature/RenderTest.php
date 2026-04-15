@@ -7,7 +7,7 @@ use Livewire\Livewire;
 
 beforeEach(function () {
     $this->seed(SecurityTestSeeder::class);
-    config(['laratier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
+    config(['wiretier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
 
     Http::fake(function ($request) {
         $url = $request->url();

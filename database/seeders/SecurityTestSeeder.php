@@ -44,7 +44,7 @@ class SecurityTestSeeder extends Seeder
             'updated_at' => $now,
         ]);
 
-        config(['laratier.admin_team' => self::ADMIN_TEAM_ID]);
+        config(['wiretier.admin_team' => self::ADMIN_TEAM_ID]);
 
         $superAdmin = User::factory()->create([
             'name' => 'Super Admin',

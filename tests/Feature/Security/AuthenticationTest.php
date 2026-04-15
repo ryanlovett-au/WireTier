@@ -6,7 +6,7 @@ use Laravel\Fortify\Features;
 
 beforeEach(function () {
     $this->seed(SecurityTestSeeder::class);
-    config(['laratier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
+    config(['wiretier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
 });
 
 test('login is rate limited after repeated failures', function () {

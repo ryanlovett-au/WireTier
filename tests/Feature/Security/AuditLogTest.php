@@ -42,7 +42,7 @@ function auditHttpFakes(): void
 
 beforeEach(function () {
     $this->seed(SecurityTestSeeder::class);
-    config(['laratier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
+    config(['wiretier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
 
     $this->superAdmin = User::where('email', 'superadmin@security-test.local')->first();
     $this->alphaAdmin = User::where('email', 'alpha-admin@security-test.local')->first();

@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Http;
 
 beforeEach(function () {
     $this->seed(SecurityTestSeeder::class);
-    config(['laratier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
+    config(['wiretier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
 });
 
 test('untrackedNetworks counts networks not in database', function () {

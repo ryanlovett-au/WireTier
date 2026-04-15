@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\File;
 
 beforeEach(function () {
     $this->seed(SecurityTestSeeder::class);
-    config(['laratier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
+    config(['wiretier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
 });
 
 test('session encryption should be enabled for production', function () {

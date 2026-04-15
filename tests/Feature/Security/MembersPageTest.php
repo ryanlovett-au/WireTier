@@ -58,7 +58,7 @@ function membersHttpFakes(?object $tracker = null): void
 
 beforeEach(function () {
     $this->seed(SecurityTestSeeder::class);
-    config(['laratier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
+    config(['wiretier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
 
     $this->alphaAdmin = User::where('email', 'alpha-admin@security-test.local')->first();
     $this->alphaMember = User::where('email', 'alpha-member@security-test.local')->first();

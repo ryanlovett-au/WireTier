@@ -46,7 +46,7 @@ function syncHttpFakes(): void
 
 beforeEach(function () {
     $this->seed(SecurityTestSeeder::class);
-    config(['laratier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
+    config(['wiretier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
 });
 
 // ─── Sync Service Tests ──────────────────────────────────────────────────

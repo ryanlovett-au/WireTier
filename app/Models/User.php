@@ -70,7 +70,7 @@ class User extends Authenticatable implements MustVerifyEmail
                 if ($teamUser->expired) {
                     if (TeamUser::where('team_id', $team->id)->count() === 1) {
                         TeamUser::where('team_id', $team->id)->where('user_id', $this->id)
-                            ->update(['expires' => now()->addDays(config('laratier.last_team_member_grace'))->format('Y-m-d')]);
+                            ->update(['expires' => now()->addDays(config('wiretier.last_team_member_grace'))->format('Y-m-d')]);
 
                         return $team;
                     }
@@ -112,7 +112,7 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function isAdmin(): bool
     {
-        return $this->current_team === config('laratier.admin_team');
+        return $this->current_team === config('wiretier.admin_team');
     }
 
     public function isTeamAdmin(): bool

@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 
 beforeEach(function () {
     $this->seed(SecurityTestSeeder::class);
-    config(['laratier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
+    config(['wiretier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
 });
 
 test('syncNetwork returns false when token is inactive', function () {

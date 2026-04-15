@@ -104,7 +104,7 @@ new #[Title('Team Settings')] class extends Component
             return;
         }
 
-        if (! array_key_exists($this->change_user_role, config('laratier.roles'))) {
+        if (! array_key_exists($this->change_user_role, config('wiretier.roles'))) {
             Flux::toast(variant: 'danger', heading: 'Error', text: 'Invalid role selected.');
             Flux::modal('change_role_modal')->close();
 
@@ -175,7 +175,7 @@ new #[Title('Team Settings')] class extends Component
 
         $this->validate([
             'invite_team_email' => 'required|email',
-            'invite_team_role' => 'required|in:'.implode(',', array_keys(config('laratier.roles'))),
+            'invite_team_role' => 'required|in:'.implode(',', array_keys(config('wiretier.roles'))),
             'invite_team_expires' => 'required|date',
         ]);
 
@@ -200,7 +200,7 @@ new #[Title('Team Settings')] class extends Component
                 ->where('team_id', $this->current_team->id)
                 ->delete();
 
-            Mail::to($this->invite_team_email)->queue(new TeamAddedUser($this->current_team->name, config('laratier.roles')[$this->invite_team_role]));
+            Mail::to($this->invite_team_email)->queue(new TeamAddedUser($this->current_team->name, config('wiretier.roles')[$this->invite_team_role]));
             AuditLog::record('team.member_added', 'team', $this->current_team->id, ['email' => $this->invite_team_email, 'role' => $this->invite_team_role]);
 
             Flux::toast(variant: 'success', heading: 'User Added', text: 'The user has been added to this team.');
@@ -225,7 +225,7 @@ new #[Title('Team Settings')] class extends Component
         $invitation->referer = auth()->user()->id;
         $invitation->save();
 
-        Mail::to($this->invite_team_email)->queue(new TeamInviteUser($this->current_team->name, config('laratier.roles')[$this->invite_team_role]));
+        Mail::to($this->invite_team_email)->queue(new TeamInviteUser($this->current_team->name, config('wiretier.roles')[$this->invite_team_role]));
         AuditLog::record('team.member_invited', 'team', $this->current_team->id, ['email' => $this->invite_team_email, 'role' => $this->invite_team_role]);
 
         Flux::toast(variant: 'success', heading: 'Invitation Sent', text: 'An invitation email has been sent.');
@@ -327,8 +327,8 @@ new #[Title('Team Settings')] class extends Component
                 <div>
                     <flux:heading size="lg">{{ $current_team->name }}</flux:heading>
                     @if (auth()->user()->teamUser?->first())
-                        <flux:badge :color="config('laratier.roles.'.auth()->user()->teamUser->first()->role.'.colour')" size="sm" class="mt-1">
-                            {{ config('laratier.roles.'.auth()->user()->teamUser->first()->role.'.name') }}
+                        <flux:badge :color="config('wiretier.roles.'.auth()->user()->teamUser->first()->role.'.colour')" size="sm" class="mt-1">
+                            {{ config('wiretier.roles.'.auth()->user()->teamUser->first()->role.'.name') }}
                         </flux:badge>
                     @endif
                 </div>
@@ -355,8 +355,8 @@ new #[Title('Team Settings')] class extends Component
                         <flux:table.cell>{{ $member->user->name }}</flux:table.cell>
                         <flux:table.cell>{{ $member->user->email }}</flux:table.cell>
                         <flux:table.cell>
-                            <flux:badge :color="config('laratier.roles.'.$member->role.'.colour')" size="sm">
-                                {{ config('laratier.roles.'.$member->role.'.name') }}
+                            <flux:badge :color="config('wiretier.roles.'.$member->role.'.colour')" size="sm">
+                                {{ config('wiretier.roles.'.$member->role.'.name') }}
                             </flux:badge>
                         </flux:table.cell>
                         <flux:table.cell>{{ $member->expires ? \Carbon\Carbon::parse($member->expires)->format('d M Y') : 'Never' }}</flux:table.cell>
@@ -392,8 +392,8 @@ new #[Title('Team Settings')] class extends Component
                     <flux:table.row :key="$invitation->id">
                         <flux:table.cell>{{ $invitation->email }}</flux:table.cell>
                         <flux:table.cell>
-                            <flux:badge :color="config('laratier.roles.'.$invitation->role.'.colour')" size="sm">
-                                {{ config('laratier.roles.'.$invitation->role.'.name') }}
+                            <flux:badge :color="config('wiretier.roles.'.$invitation->role.'.colour')" size="sm">
+                                {{ config('wiretier.roles.'.$invitation->role.'.name') }}
                             </flux:badge>
                         </flux:table.cell>
                         <flux:table.cell>{{ $invitation->expires ? \Carbon\Carbon::parse($invitation->expires)->format('d M Y') : 'Never' }}</flux:table.cell>
@@ -424,7 +424,7 @@ new #[Title('Team Settings')] class extends Component
             <flux:input wire:model="invite_team_email" type="email" label="Email Address" class="mb-4" />
 
             <flux:radio.group wire:model="invite_team_role" variant="cards" :indicator="false" class="flex-col mb-4 max-w-xs" label="Role">
-                @foreach (config('laratier.roles') as $key => $role)
+                @foreach (config('wiretier.roles') as $key => $role)
                     <flux:radio :value="$key" :label="$role['name']" :description="$role['description']" />
                 @endforeach
             </flux:radio.group>
@@ -445,7 +445,7 @@ new #[Title('Team Settings')] class extends Component
 
             <flux:fieldset>
                 <div class="space-y-3">
-                @foreach (config('laratier.permissions') as $permission)
+                @foreach (config('wiretier.permissions') as $permission)
                     <flux:separator variant="subtle" />
                     <flux:switch
                         label="{{ ucwords(str_replace('_', ' ', $permission)) }}"
@@ -495,7 +495,7 @@ new #[Title('Team Settings')] class extends Component
                 Change the role for {{ $this->change_user['user']['name'] ?? '' }} in the {{ $this->current_team->name }} team.
             </flux:subheading>
             <flux:radio.group wire:model="change_user_role" variant="cards" :indicator="false" class="flex-col mb-6">
-                @foreach (config('laratier.roles') as $key => $role)
+                @foreach (config('wiretier.roles') as $key => $role)
                     <flux:radio :value="$key" :label="$role['name']" :description="$role['description']" />
                 @endforeach
             </flux:radio.group>

@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\RateLimiter;
 
 beforeEach(function () {
     $this->seed(SecurityTestSeeder::class);
-    config(['laratier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
+    config(['wiretier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
 });
 
 test('rate limiter throws when too many attempts', function () {
