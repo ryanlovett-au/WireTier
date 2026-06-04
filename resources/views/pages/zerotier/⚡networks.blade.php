@@ -804,7 +804,9 @@ new #[Title('ZeroTier Networks')] class extends Component
                     <div class="flex items-end justify-between">
                         <div>
                             <div class="flex items-center gap-3">
-                                <flux:heading size="lg">{{ $network['name'] ?? 'Unnamed' }}</flux:heading>
+                                <a href="{{ route('zerotier.members', ['networkId' => $network['nwid'] ?? $network['id'], 'tokenId' => $selectedToken]) }}" class="underline underline-offset-4 decoration-zinc-300 hover:decoration-zinc-500 dark:decoration-zinc-600 dark:hover:decoration-zinc-400" wire:navigate>
+                                    <flux:heading size="lg">{{ $network['name'] ?? 'Unnamed' }}</flux:heading>
+                                </a>
                                 @if ($network['private'] ?? true)
                                     <flux:badge color="green" size="sm">Private</flux:badge>
                                 @else
