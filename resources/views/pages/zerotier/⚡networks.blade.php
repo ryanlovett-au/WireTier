@@ -2,6 +2,7 @@
 
 use App\Models\AuditLog;
 use App\Models\Team;
+use App\Models\TeamUser;
 use App\Models\ZerotierNetwork;
 use App\Models\ZerotierToken;
 use App\Services\ZerotierService;
@@ -49,6 +50,11 @@ new #[Title('ZeroTier Networks')] class extends Component
     public string $new_pool_start = '';
 
     public string $new_pool_end = '';
+
+    // Move network to another team
+    public string $move_to_team_id = '';
+
+    public array $movable_teams = [];
 
     // Create network form
     public string $new_network_name = '';
@@ -428,6 +434,9 @@ new #[Title('ZeroTier Networks')] class extends Component
             $this->new_pool_start = '';
             $this->new_pool_end = '';
 
+            $this->move_to_team_id = '';
+            $this->movable_teams = $this->loadMovableTeams();
+
             Flux::modal('editNetworkModal')->show();
         } catch (Exception $e) {
             report($e);
@@ -517,6 +526,133 @@ new #[Title('ZeroTier Networks')] class extends Component
             report($e);
             Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to save network. Please try again.');
         }
+    }
+
+    // ─── Move Network ────────────────────────────────────────────────
+
+    protected function loadMovableTeams(): array
+    {
+        $currentTeamId = auth()->user()->team?->id;
+
+        $query = Team::query()->orderBy('name');
+
+        if ($currentTeamId) {
+            $query->where('id', '!=', $currentTeamId);
+        }
+
+        if (! auth()->user()->isAdmin()) {
+            $query->whereIn('id', TeamUser::query()
+                ->select('team_id')
+                ->where('user_id', auth()->id())
+                ->where('role', 'admin'));
+        }
+
+        return $query->get(['id', 'name'])
+            ->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])
+            ->toArray();
+    }
+
+    public function confirmMoveNetwork(): void
+    {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
+        if (empty($this->move_to_team_id)) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Please select a destination team.');
+
+            return;
+        }
+
+        Flux::modal('moveNetworkConfirm')->show();
+    }
+
+    public function moveNetwork(): void
+    {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
+        if (empty($this->move_to_team_id)) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Please select a destination team.');
+
+            return;
+        }
+
+        $sourceTeamId = auth()->user()->team?->id;
+
+        if (! $sourceTeamId) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'No source team.');
+
+            return;
+        }
+
+        if ($this->move_to_team_id === $sourceTeamId) {
+            Flux::toast(variant: 'warning', heading: 'No Change', text: 'This network is already on that team.');
+
+            return;
+        }
+
+        // Re-verify the user is admin of the destination team (system admin bypasses this).
+        if (! auth()->user()->isAdmin()) {
+            $isAdminOfDestination = TeamUser::where('user_id', auth()->id())
+                ->where('team_id', $this->move_to_team_id)
+                ->where('role', 'admin')
+                ->exists();
+
+            if (! $isAdminOfDestination) {
+                Flux::toast(variant: 'danger', heading: 'Permission Denied', text: 'You must be an admin of the destination team.');
+
+                return;
+            }
+        }
+
+        $destinationTeam = Team::find($this->move_to_team_id);
+
+        if (! $destinationTeam) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Destination team not found.');
+
+            return;
+        }
+
+        $network = ZerotierNetwork::where('network_id', $this->editing_network_id)
+            ->where('team_id', $sourceTeamId)
+            ->where('zerotier_token_id', $this->selectedToken)
+            ->first();
+
+        if (! $network) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Network not found.');
+
+            return;
+        }
+
+        $networkName = $network->name;
+        $network->team_id = $destinationTeam->id;
+        $network->save();
+
+        // Audit on source team (default) and destination team.
+        AuditLog::record('network.moved', 'network', $this->editing_network_id, [
+            'name' => $networkName,
+            'from_team_id' => $sourceTeamId,
+            'to_team_id' => $destinationTeam->id,
+            'to_team_name' => $destinationTeam->name,
+        ]);
+
+        AuditLog::record('network.received', 'network', $this->editing_network_id, [
+            'name' => $networkName,
+            'from_team_id' => $sourceTeamId,
+        ], teamId: $destinationTeam->id);
+
+        // Invalidate cached network lists on both sides.
+        Cache::forget("team_{$sourceTeamId}_networks_{$this->selectedToken}");
+        Cache::forget("team_{$destinationTeam->id}_networks_{$this->selectedToken}");
+
+        Flux::toast(variant: 'success', heading: 'Moved', text: "Network has been moved to {$destinationTeam->name}.");
+        Flux::modal('moveNetworkConfirm')->close();
+        Flux::modal('editNetworkModal')->close();
+
+        $this->move_to_team_id = '';
+        $this->loadNetworks();
     }
 
     // ─── Delete Network ──────────────────────────────────────────────
@@ -722,6 +858,7 @@ new #[Title('ZeroTier Networks')] class extends Component
                 <flux:tab name="settings">Settings</flux:tab>
                 <flux:tab name="ip_ranges">IP Ranges</flux:tab>
                 <flux:tab name="routes">Managed Routes</flux:tab>
+                <flux:tab name="move">Move Team</flux:tab>
             </flux:tabs>
 
             {{-- Settings Panel --}}
@@ -816,9 +953,66 @@ new #[Title('ZeroTier Networks')] class extends Component
                 </div>
             </div>
 
-            <div class="flex justify-end gap-2" style="margin-top: 3rem;">
+            {{-- Move Panel --}}
+            <div x-show="$wire.edit_tab === 'move'" class="space-y-5 min-h-[220px]">
+                <div>
+                    <flux:label>Current Team</flux:label>
+                    <div class="mt-1 px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm">
+                        {{ auth()->user()->team?->name ?? '—' }}
+                    </div>
+                </div>
+
+                @if (count($movable_teams) > 0)
+                    <flux:select wire:model="move_to_team_id" label="Move to Team" placeholder="Select destination team…">
+                        @foreach ($movable_teams as $team)
+                            <flux:select.option value="{{ $team['id'] }}">{{ $team['name'] }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+
+                    <div class="flex items-start gap-2 px-3 py-2.5 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 text-sm">
+                        <flux:icon name="exclamation-triangle" class="size-4 text-amber-500 shrink-0 mt-0.5" />
+                        <div class="text-amber-900 dark:text-amber-200">
+                            Moving this network will transfer it (and all its members) to the destination team. Members of the source team will lose access.
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end">
+                        <flux:button variant="primary" wire:click="confirmMoveNetwork">Move Network</flux:button>
+                    </div>
+                @else
+                    <div class="flex items-start gap-2 px-3 py-2.5 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm text-zinc-500">
+                        <flux:icon name="information-circle" class="size-4 shrink-0 mt-0.5" />
+                        <div>You are not an admin of any other team, so there is nowhere to move this network.</div>
+                    </div>
+                @endif
+            </div>
+
+            <div x-show="$wire.edit_tab !== 'move'" class="flex justify-end gap-2" style="margin-top: 3rem;">
                 <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>
                 <flux:button variant="primary" wire:click="saveNetwork">Save Changes</flux:button>
+            </div>
+        </flux:modal>
+
+        {{-- Move Network Confirm Modal --}}
+        <flux:modal name="moveNetworkConfirm" focusable class="max-w-sm">
+            <div class="w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-900/40 p-4 mt-4 mb-4 mx-auto flex items-center justify-center">
+                <flux:icon name="arrow-right-circle" class="size-6 text-amber-600 dark:text-amber-400" />
+            </div>
+
+            <flux:heading size="lg" class="text-center">Move Network?</flux:heading>
+            <flux:subheading class="text-center mt-2 mb-6">
+                @php
+                    $destTeamName = collect($movable_teams)->firstWhere('id', $move_to_team_id)['name'] ?? '';
+                @endphp
+                This will transfer the network and all its members to <strong>{{ $destTeamName }}</strong>.
+                Members of <strong>{{ auth()->user()->team?->name }}</strong> will lose access.
+            </flux:subheading>
+
+            <div class="flex justify-end gap-2">
+                <flux:modal.close>
+                    <flux:button variant="filled">Cancel</flux:button>
+                </flux:modal.close>
+                <flux:button variant="primary" wire:click="moveNetwork">Move</flux:button>
             </div>
         </flux:modal>
 
