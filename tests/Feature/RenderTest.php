@@ -182,6 +182,19 @@ test('welcome page renders', function () {
     $this->get('/')->assertStatus(200);
 });
 
+test('hide welcome redirects guests to login', function () {
+    config(['wiretier.hide_welcome' => true]);
+
+    $this->get('/')->assertRedirect(route('login'));
+});
+
+test('hide welcome redirects authenticated users to dashboard', function () {
+    config(['wiretier.hide_welcome' => true]);
+    $this->actingAs($this->alphaAdmin);
+
+    $this->get('/')->assertRedirect(route('dashboard'));
+});
+
 // ─── Protected Routes (HTTP) ─────────────────────────────────────────────
 
 test('dashboard route renders for authenticated user', function () {

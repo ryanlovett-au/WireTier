@@ -30,6 +30,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Hide Welcome Page
+    |--------------------------------------------------------------------------
+    |
+    | When true, the marketing welcome page at "/" is hidden. Guests are
+    | redirected to the login page and authenticated users go straight to the
+    | dashboard.
+    |
+    */
+    'hide_welcome' => env('WIRETIER_HIDE_WELCOME', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Team Roles
     |--------------------------------------------------------------------------
     |

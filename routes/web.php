@@ -1,8 +1,15 @@
 <?php
 
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
-Route::view('/', 'welcome')->name('home');
+Route::get('/', function () {
+    if (config('wiretier.hide_welcome')) {
+        return redirect(Auth::check() ? route('dashboard') : route('login'));
+    }
+
+    return view('welcome');
+})->name('home');
 
 Route::middleware(['auth', 'verified', 'throttle:60,1'])->group(function () {
     Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
