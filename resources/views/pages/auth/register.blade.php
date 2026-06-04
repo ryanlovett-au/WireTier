@@ -5,6 +5,13 @@
         <!-- Session Status -->
         <x-auth-session-status class="text-center" :status="session('status')" />
 
+        @if (config('wiretier.registration') === 'invite')
+            <flux:callout icon="information-circle" variant="secondary">
+                <flux:callout.heading>{{ __('Registration is by invitation only') }}</flux:callout.heading>
+                <flux:callout.text>{{ __('Use the email address that received the team invitation.') }}</flux:callout.text>
+            </flux:callout>
+        @endif
+
         <form method="POST" action="{{ route('register.store') }}" class="flex flex-col gap-6">
             @csrf
             <!-- Name -->

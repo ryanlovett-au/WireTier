@@ -15,6 +15,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Registration Mode
+    |--------------------------------------------------------------------------
+    |
+    | Controls who can register a new account.
+    |
+    |   open    - anyone can register (default)
+    |   invite  - only emails with a pending, non-expired TeamInvitation may
+    |             register
+    |   closed  - the /register route is removed entirely
+    |
+    */
+    'registration' => env('WIRETIER_REGISTRATION', 'open'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Team Roles
     |--------------------------------------------------------------------------
     |

@@ -7,6 +7,7 @@ use App\Concerns\ProfileValidationRules;
 use App\Models\TeamInvitation;
 use App\Models\TeamUser;
 use App\Models\User;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Fortify\Contracts\CreatesNewUsers;
 
@@ -21,9 +22,24 @@ class CreateNewUser implements CreatesNewUsers
      */
     public function create(array $input): User
     {
-        Validator::make($input, [
+        $rules = [
             ...$this->profileRules(),
             'password' => $this->passwordRules(),
+        ];
+
+        if (config('wiretier.registration') === 'invite') {
+            $rules['email'] = array_merge((array) $rules['email'], [
+                Rule::exists('team_invitations', 'email')->where(function ($query) {
+                    $query->where(function ($q) {
+                        $q->whereNull('expires')
+                            ->orWhere('expires', '>=', now()->format('Y-m-d'));
+                    });
+                }),
+            ]);
+        }
+
+        Validator::make($input, $rules, [
+            'email.exists' => __('Registration is by invitation only. Please ask a team admin to invite this email address.'),
         ])->validate();
 
         $user = User::create([
