@@ -91,6 +91,7 @@ new #[Title('Security settings')] class extends Component {
     <flux:heading class="sr-only">{{ __('Security settings') }}</flux:heading>
 
     <x-pages::settings.layout :heading="__('Update password')" :subheading="__('Ensure your account is using a long, random password to stay secure')">
+        <div class="max-w-lg">
         <form method="POST" wire:submit="updatePassword" class="mt-6 space-y-6">
             <flux:input
                 wire:model="current_password"
@@ -174,5 +175,6 @@ new #[Title('Security settings')] class extends Component {
                 </div>
             </section>
         @endif
+        </div>
     </x-pages::settings.layout>
 </section>

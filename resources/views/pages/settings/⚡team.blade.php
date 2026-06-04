@@ -309,7 +309,7 @@ new #[Title('Team Settings')] class extends Component
     @include('partials.settings-heading')
 
     <x-pages::settings.layout :heading="$current_team->name" :subheading="__('Manage team members, invitations, and settings.')">
-    <div class="max-w-2xl">
+    <div class="max-w-3xl">
         {{-- Current Team Info --}}
         <flux:card class="mb-6">
             <div class="flex items-center gap-3">
