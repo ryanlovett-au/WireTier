@@ -45,6 +45,10 @@ new class extends Component
     #[On('open-network-edit')]
     public function open(string $networkId, string $tokenId): void
     {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
         $token = ZerotierToken::findOrFail($tokenId);
         $service = new ZerotierService($token);
 
@@ -309,7 +313,9 @@ new class extends Component
             <flux:tab name="settings">Settings</flux:tab>
             <flux:tab name="ip_ranges">IP Ranges</flux:tab>
             <flux:tab name="routes">Managed Routes</flux:tab>
-            <flux:tab name="move">Move Team</flux:tab>
+            @if (auth()->user()->isTeamAdmin())
+                <flux:tab name="move">Move Team</flux:tab>
+            @endif
         </flux:tabs>
 
         {{-- Settings Panel --}}
@@ -405,38 +411,40 @@ new class extends Component
         </div>
 
         {{-- Move Panel --}}
-        <div x-show="$wire.edit_tab === 'move'" class="space-y-5 min-h-[220px]">
-            <div>
-                <flux:label>Current Team</flux:label>
-                <div class="mt-1 px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm">
-                    {{ auth()->user()->team?->name ?? '—' }}
-                </div>
-            </div>
-
-            @if (count($movable_teams) > 0)
-                <flux:select wire:model="move_to_team_id" label="Move to Team" placeholder="Select destination team…">
-                    @foreach ($movable_teams as $team)
-                        <flux:select.option value="{{ $team['id'] }}">{{ $team['name'] }}</flux:select.option>
-                    @endforeach
-                </flux:select>
-
-                <div class="flex items-start gap-2 px-3 py-2.5 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 text-sm">
-                    <flux:icon name="exclamation-triangle" class="size-4 text-amber-500 shrink-0 mt-0.5" />
-                    <div class="text-amber-900 dark:text-amber-200">
-                        Moving this network will transfer it (and all its members) to the destination team. Members of the source team will lose access.
+        @if (auth()->user()->isTeamAdmin())
+            <div x-show="$wire.edit_tab === 'move'" class="space-y-5 min-h-[220px]">
+                <div>
+                    <flux:label>Current Team</flux:label>
+                    <div class="mt-1 px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm">
+                        {{ auth()->user()->team?->name ?? '—' }}
                     </div>
                 </div>
 
-                <div class="flex justify-end">
-                    <flux:button variant="primary" wire:click="confirmMoveNetwork">Move Network</flux:button>
-                </div>
-            @else
-                <div class="flex items-start gap-2 px-3 py-2.5 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm text-zinc-500">
-                    <flux:icon name="information-circle" class="size-4 shrink-0 mt-0.5" />
-                    <div>You are not an admin of any other team, so there is nowhere to move this network.</div>
-                </div>
-            @endif
-        </div>
+                @if (count($movable_teams) > 0)
+                    <flux:select wire:model="move_to_team_id" label="Move to Team" placeholder="Select destination team…">
+                        @foreach ($movable_teams as $team)
+                            <flux:select.option value="{{ $team['id'] }}">{{ $team['name'] }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+
+                    <div class="flex items-start gap-2 px-3 py-2.5 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 text-sm">
+                        <flux:icon name="exclamation-triangle" class="size-4 text-amber-500 shrink-0 mt-0.5" />
+                        <div class="text-amber-900 dark:text-amber-200">
+                            Moving this network will transfer it (and all its members) to the destination team. Members of the source team will lose access.
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end">
+                        <flux:button variant="primary" wire:click="confirmMoveNetwork">Move Network</flux:button>
+                    </div>
+                @else
+                    <div class="flex items-start gap-2 px-3 py-2.5 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm text-zinc-500">
+                        <flux:icon name="information-circle" class="size-4 shrink-0 mt-0.5" />
+                        <div>You are not an admin of any other team, so there is nowhere to move this network.</div>
+                    </div>
+                @endif
+            </div>
+        @endif
 
         <div x-show="$wire.edit_tab !== 'move'" class="flex justify-end gap-2" style="margin-top: 3rem;">
             <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>
