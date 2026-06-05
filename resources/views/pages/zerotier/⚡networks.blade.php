@@ -549,17 +549,9 @@ new #[Title('ZeroTier Networks')] class extends Component
                                 @endif
                             </div>
                             <div class="flex items-center gap-4 mt-2 text-sm text-zinc-500">
-                                <span class="font-mono flex items-center gap-1">
+                                <x-copy-pill :value="$network['nwid'] ?? $network['id'] ?? ''" class="font-mono" icon="size-3.5">
                                     {{ $network['nwid'] ?? $network['id'] ?? '—' }}
-                                    <span
-                                        x-data="{ copied: false }"
-                                        x-on:click.stop="navigator.clipboard.writeText('{{ $network['nwid'] ?? $network['id'] ?? '' }}'); copied = true; setTimeout(() => copied = false, 2000)"
-                                        class="cursor-pointer"
-                                    >
-                                        <flux:icon x-show="!copied" name="clipboard" class="size-3.5 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors" />
-                                        <flux:icon x-show="copied" name="clipboard-document-check" class="size-3.5 text-green-500" />
-                                    </span>
-                                </span>
+                                </x-copy-pill>
                                 <flux:badge color="zinc" size="sm">{{ $network['_member_count'] ?? 0 }} members</flux:badge>
                                 @if (($network['_pending_count'] ?? 0) > 0)
                                     <flux:badge color="orange" size="sm">{{ $network['_pending_count'] }} pending</flux:badge>

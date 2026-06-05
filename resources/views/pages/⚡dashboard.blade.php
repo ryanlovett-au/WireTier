@@ -184,16 +184,8 @@ new #[Title('Dashboard')] class extends Component
                             <div class="flex items-center justify-between">
                                 <div>
                                     <a href="{{ route('zerotier.members', ['networkId' => $network->network_id, 'tokenId' => $network->zerotier_token_id]) }}" class="font-medium text-sm hover:underline text-accent" wire:navigate>{{ $network->name ?? 'Unnamed' }}</a>
-                                    <div class="text-xs text-zinc-500 font-mono flex items-center gap-1">
-                                        {{ $network->network_id }}
-                                        <span
-                                            x-data="{ copied: false }"
-                                            x-on:click.stop="navigator.clipboard.writeText('{{ $network->network_id }}'); copied = true; setTimeout(() => copied = false, 2000)"
-                                            class="cursor-pointer"
-                                        >
-                                            <flux:icon x-show="!copied" name="clipboard" class="size-3 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors" />
-                                            <flux:icon x-show="copied" name="clipboard-document-check" class="size-3 text-green-500" />
-                                        </span>
+                                    <div class="text-xs text-zinc-500 font-mono">
+                                        <x-copy-pill :value="$network->network_id" />
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2">

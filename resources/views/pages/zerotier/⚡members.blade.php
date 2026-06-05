@@ -326,17 +326,7 @@ new #[Title('Network Members')] class extends Component
                     <flux:heading size="xl">{{ $network['name'] ?? 'Network' }}</flux:heading>
                 </div>
                 <div class="flex items-center gap-2 flex-wrap mt-1">
-                    <span class="font-mono text-sm text-zinc-500 flex items-center gap-1">
-                        {{ $networkId }}
-                        <span
-                            x-data="{ copied: false }"
-                            x-on:click.stop="navigator.clipboard.writeText('{{ $networkId }}'); copied = true; setTimeout(() => copied = false, 2000)"
-                            class="cursor-pointer"
-                        >
-                            <flux:icon x-show="!copied" name="clipboard" class="size-3 hover:text-zinc-700 dark:hover:text-zinc-300 transition-colors" />
-                            <flux:icon x-show="copied" name="clipboard-document-check" class="size-3 text-green-500" />
-                        </span>
-                    </span>
+                    <x-copy-pill :value="$networkId" class="font-mono text-sm text-zinc-500" />
                     <flux:badge color="zinc" size="sm">
                         {{ collect($members)->where('authorized', true)->count() }} members
                     </flux:badge>
@@ -408,7 +398,7 @@ new #[Title('Network Members')] class extends Component
                             </flux:table.cell>
                             <flux:table.cell class="font-mono text-xs">
                                 @foreach (($member['ipAssignments'] ?? []) as $ip)
-                                    <div>{{ $ip }}</div>
+                                    <div><x-copy-pill :value="$ip" /></div>
                                 @endforeach
                             </flux:table.cell>
                             <flux:table.cell>
