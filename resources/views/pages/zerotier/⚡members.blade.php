@@ -7,6 +7,7 @@ use App\Models\ZerotierToken;
 use App\Services\ZerotierService;
 use App\Services\ZerotierSyncService;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
@@ -174,6 +175,20 @@ new #[Title('Network Members')] class extends Component
         $this->loadMembers();
     }
 
+    #[On('network-updated')]
+    public function reloadAfterNetworkUpdated(): void
+    {
+        $this->loadNetwork();
+        $this->loadMembers();
+    }
+
+    #[On('network-moved')]
+    public function reloadAfterNetworkMoved(): void
+    {
+        // The network is no longer on the user's current team — bounce back to the list.
+        $this->redirect(route('zerotier.networks'), navigate: true);
+    }
+
     public function authorizeMember($nodeId): void
     {
         if (! auth()->user()->isTeamAdmin()) {
@@ -336,7 +351,12 @@ new #[Title('Network Members')] class extends Component
                     @endforeach
                 </div>
             </div>
-            <flux:button size="sm" icon="arrow-path" wire:click="syncAndReload">Refresh</flux:button>
+            <div class="flex items-center gap-2">
+                @if (auth()->user()->isTeamAdmin())
+                    <flux:button size="sm" icon="cog-6-tooth" wire:click="$dispatch('open-network-edit', { networkId: '{{ $networkId }}', tokenId: '{{ $tokenId }}' })">Settings</flux:button>
+                @endif
+                <flux:button size="sm" icon="arrow-path" wire:click="syncAndReload">Refresh</flux:button>
+            </div>
         </div>
         @if ($lastRefreshedAt)
         <div
@@ -448,6 +468,9 @@ new #[Title('Network Members')] class extends Component
                 </flux:table>
             </flux:card>
         @endif
+
+        {{-- Network Edit / Move Modal (shared component) --}}
+        <livewire:pages::zerotier.network-edit-modal />
 
         {{-- Delete Member Modal --}}
         <flux:modal name="deleteMemberModal" focusable class="max-w-sm">
