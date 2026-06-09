@@ -248,11 +248,7 @@ test('viewer cannot authorize members', function () {
         'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
     ])->call('authorizeMember', 'aabb000001');
 
-    try {
-        expect($tracker->called)->toBeFalse('Viewer was able to authorize a member');
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: authorizeMember() has no role-based authorization — viewers can authorize network members');
-    }
+    expect($tracker->called)->toBeFalse('Viewer was able to authorize a member');
 });
 
 test('viewer cannot deauthorize members', function () {
@@ -267,11 +263,7 @@ test('viewer cannot deauthorize members', function () {
         'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
     ])->call('deauthorizeMember', 'aabb000001');
 
-    try {
-        expect($tracker->called)->toBeFalse('Viewer was able to deauthorize a member');
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: deauthorizeMember() has no role-based authorization — viewers can deauthorize network members');
-    }
+    expect($tracker->called)->toBeFalse('Viewer was able to deauthorize a member');
 });
 
 test('viewer cannot delete members', function () {
@@ -288,9 +280,82 @@ test('viewer cannot delete members', function () {
         ->set('delete_member_id', 'aabb000001')
         ->call('deleteMember');
 
-    try {
-        expect($tracker->called)->toBeFalse('Viewer was able to delete a member');
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: deleteMember() has no role-based authorization — viewers can delete network members');
-    }
+    expect($tracker->called)->toBeFalse('Viewer was able to delete a member');
+});
+
+test('viewer cannot open edit member modal', function () {
+    membersHttpFakes();
+    $this->actingAs($this->alphaViewer);
+    session()->forget('current_team');
+
+    $component = Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])->call('syncAndReload')
+        ->call('editMemberModal', 'aabb000001');
+
+    $component->assertSet('edit_member_id', '');
+});
+
+test('viewer cannot open delete member modal', function () {
+    membersHttpFakes();
+    $this->actingAs($this->alphaViewer);
+    session()->forget('current_team');
+
+    $component = Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])->call('confirmDeleteMember', 'aabb000001');
+
+    $component->assertSet('delete_member_id', '');
+});
+
+test('member can authorize members', function () {
+    $tracker = (object) ['called' => false];
+    membersHttpFakes($tracker);
+
+    $this->actingAs($this->alphaMember);
+    session()->forget('current_team');
+
+    Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])->call('authorizeMember', 'aabb000001');
+
+    expect($tracker->called)->toBeTrue();
+});
+
+test('member can delete members', function () {
+    $tracker = (object) ['called' => false];
+    membersHttpFakes($tracker);
+
+    $this->actingAs($this->alphaMember);
+    session()->forget('current_team');
+
+    Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])
+        ->set('delete_member_id', 'aabb000001')
+        ->call('deleteMember');
+
+    expect($tracker->called)->toBeTrue();
+});
+
+test('member can edit members', function () {
+    $tracker = (object) ['called' => false];
+    membersHttpFakes($tracker);
+
+    $this->actingAs($this->alphaMember);
+    session()->forget('current_team');
+
+    $component = Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])->call('syncAndReload')
+        ->call('editMemberModal', 'aabb000001')
+        ->set('edit_member_name', 'Member-set name')
+        ->call('saveMember');
+
+    expect($tracker->called)->toBeTrue();
 });

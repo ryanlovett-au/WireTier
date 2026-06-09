@@ -37,6 +37,24 @@ new #[Title('Team Settings')] class extends Component
 
     public string $invite_team_expires = '';
 
+    #[Computed]
+    public function isAdminTeam(): bool
+    {
+        return $this->current_team->id === config('wiretier.admin_team');
+    }
+
+    #[Computed]
+    public function availableRoles(): array
+    {
+        $roles = config('wiretier.roles');
+
+        if ($this->isAdminTeam()) {
+            return ['admin' => $roles['admin']];
+        }
+
+        return $roles;
+    }
+
     public string $remove_team_user = '';
 
     public string $remove_team_user_name = '';
@@ -59,6 +77,10 @@ new #[Title('Team Settings')] class extends Component
         $this->current_team = Team::findOrFail($teamId);
         $this->edit_team_name = $this->current_team->name;
         $this->invite_team_expires = now()->addYear()->format('Y-m-d');
+
+        if ($this->current_team->id === config('wiretier.admin_team')) {
+            $this->invite_team_role = 'admin';
+        }
 
         if (request()->query('action') === 'admin') {
             $this->action = 'admin';
@@ -106,6 +128,13 @@ new #[Title('Team Settings')] class extends Component
 
         if (! array_key_exists($this->change_user_role, config('wiretier.roles'))) {
             Flux::toast(variant: 'danger', heading: 'Error', text: 'Invalid role selected.');
+            Flux::modal('change_role_modal')->close();
+
+            return;
+        }
+
+        if ($this->current_team->id === config('wiretier.admin_team') && $this->change_user_role !== 'admin') {
+            Flux::toast(variant: 'danger', heading: 'Not Allowed', text: 'Only the admin role is allowed on the admin team.');
             Flux::modal('change_role_modal')->close();
 
             return;
@@ -179,6 +208,12 @@ new #[Title('Team Settings')] class extends Component
             'invite_team_expires' => 'required|date',
         ]);
 
+        if ($this->current_team->id === config('wiretier.admin_team') && $this->invite_team_role !== 'admin') {
+            Flux::toast(variant: 'danger', heading: 'Not Allowed', text: 'Only the admin role is allowed on the admin team.');
+
+            return;
+        }
+
         // Check if email belongs to existing user
         if ($invited = User::where('email', $this->invite_team_email)->first()) {
             // Check not already a member
@@ -234,6 +269,10 @@ new #[Title('Team Settings')] class extends Component
 
     public function removeUserModal($userId): void
     {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
         $this->remove_team_user = $userId;
 
         if ($userId == auth()->user()->id) {
@@ -283,6 +322,10 @@ new #[Title('Team Settings')] class extends Component
 
     public function cancelInvitation($invitationId): void
     {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
         TeamInvitation::where('id', $invitationId)->where('team_id', $this->current_team->id)->delete();
         AuditLog::record('team.invitation_cancelled', 'team', $this->current_team->id, ['invitation_id' => $invitationId]);
         Flux::toast(variant: 'success', heading: 'Cancelled', text: 'The invitation has been cancelled.');
@@ -424,10 +467,19 @@ new #[Title('Team Settings')] class extends Component
             <flux:input wire:model="invite_team_email" type="email" label="Email Address" class="mb-4" />
 
             <flux:radio.group wire:model="invite_team_role" variant="cards" :indicator="false" class="flex-col mb-4 max-w-xs" label="Role">
-                @foreach (config('wiretier.roles') as $key => $role)
+                @foreach ($this->availableRoles as $key => $role)
                     <flux:radio :value="$key" :label="$role['name']" :description="$role['description']" />
                 @endforeach
             </flux:radio.group>
+
+            @if ($this->isAdminTeam)
+                <div class="flex items-start gap-2 px-3 py-2.5 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 text-sm mb-4 max-w-xs">
+                    <flux:icon name="shield-check" class="size-4 text-amber-500 shrink-0 mt-0.5" />
+                    <div class="text-amber-900 dark:text-amber-200">
+                        Only the <strong>Admin</strong> role can be assigned on the admin team.
+                    </div>
+                </div>
+            @endif
 
             <flux:input wire:model="invite_team_expires" type="date" label="Membership Expires" class="mb-4 max-w-xs" />
 
@@ -495,10 +547,19 @@ new #[Title('Team Settings')] class extends Component
                 Change the role for {{ $this->change_user['user']['name'] ?? '' }} in the {{ $this->current_team->name }} team.
             </flux:subheading>
             <flux:radio.group wire:model="change_user_role" variant="cards" :indicator="false" class="flex-col mb-6">
-                @foreach (config('wiretier.roles') as $key => $role)
+                @foreach ($this->availableRoles as $key => $role)
                     <flux:radio :value="$key" :label="$role['name']" :description="$role['description']" />
                 @endforeach
             </flux:radio.group>
+
+            @if ($this->isAdminTeam)
+                <div class="flex items-start gap-2 px-3 py-2.5 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 text-sm mb-6">
+                    <flux:icon name="shield-check" class="size-4 text-amber-500 shrink-0 mt-0.5" />
+                    <div class="text-amber-900 dark:text-amber-200">
+                        Only the <strong>Admin</strong> role can be assigned on the admin team.
+                    </div>
+                </div>
+            @endif
         </div>
         <div class="flex justify-end space-x-2">
             <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>

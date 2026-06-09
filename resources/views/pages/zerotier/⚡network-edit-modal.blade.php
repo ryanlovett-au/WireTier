@@ -45,7 +45,7 @@ new class extends Component
     #[On('open-network-edit')]
     public function open(string $networkId, string $tokenId): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! auth()->user()->canManageNetworks()) {
             return;
         }
 
@@ -124,7 +124,7 @@ new class extends Component
 
     public function saveNetwork(): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! auth()->user()->canManageNetworks()) {
             return;
         }
 

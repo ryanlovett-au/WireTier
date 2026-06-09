@@ -191,7 +191,7 @@ new #[Title('Network Members')] class extends Component
 
     public function authorizeMember($nodeId): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! auth()->user()->canManageNetworks()) {
             return;
         }
 
@@ -208,7 +208,7 @@ new #[Title('Network Members')] class extends Component
 
     public function deauthorizeMember($nodeId): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! auth()->user()->canManageNetworks()) {
             return;
         }
 
@@ -225,13 +225,17 @@ new #[Title('Network Members')] class extends Component
 
     public function confirmDeleteMember(string $nodeId): void
     {
+        if (! auth()->user()->canManageNetworks()) {
+            return;
+        }
+
         $this->delete_member_id = $nodeId;
         Flux::modal('deleteMemberModal')->show();
     }
 
     public function deleteMember(): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! auth()->user()->canManageNetworks()) {
             return;
         }
 
@@ -250,6 +254,10 @@ new #[Title('Network Members')] class extends Component
 
     public function editMemberModal($nodeId): void
     {
+        if (! auth()->user()->canManageNetworks()) {
+            return;
+        }
+
         $dbNetwork = $this->getDbNetwork();
         $member = ZerotierMember::where('zerotier_network_id', $dbNetwork?->id)
             ->where('node_id', $nodeId)
@@ -287,7 +295,7 @@ new #[Title('Network Members')] class extends Component
 
     public function saveMember(): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! auth()->user()->canManageNetworks()) {
             return;
         }
 
@@ -342,7 +350,7 @@ new #[Title('Network Members')] class extends Component
                 </div>
             </div>
             <div class="flex items-center gap-2">
-                @if (auth()->user()->isTeamAdmin())
+                @if (auth()->user()->canManageNetworks())
                     <flux:button size="sm" icon="cog-6-tooth" wire:click="$dispatch('open-network-edit', { networkId: '{{ $networkId }}', tokenId: '{{ $tokenId }}' })">Settings</flux:button>
                 @endif
                 <flux:button size="sm" icon="arrow-path" wire:click="syncAndReload">Refresh</flux:button>
@@ -382,7 +390,9 @@ new #[Title('Network Members')] class extends Component
                         <flux:table.column>Bridge</flux:table.column>
                         <flux:table.column sortable :sorted="$sortBy === 'last_seen'" :direction="$sortDirection" wire:click="sort('last_seen')">Last Seen</flux:table.column>
                         <flux:table.column>Version / IP / Latency</flux:table.column>
-                        <flux:table.column>Actions</flux:table.column>
+                        @if (auth()->user()->canManageNetworks())
+                            <flux:table.column>Actions</flux:table.column>
+                        @endif
                     </flux:table.columns>
                     <flux:table.rows>
                     @foreach ($this->getSortedMembers() as $member)
@@ -441,17 +451,19 @@ new #[Title('Network Members')] class extends Component
                                     <div>{{ $latency }} ms</div>
                                 @endif
                             </flux:table.cell>
-                            <flux:table.cell>
-                                <div class="flex gap-1">
-                                    @if (! ($member['authorized'] ?? false))
-                                        <flux:button size="xs" icon="check" style="background:#16a34a;color:#fff;border-color:#16a34a;" tooltip="Authorise" wire:click="authorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
-                                    @else
-                                        <flux:button size="xs" icon="x-mark" style="background:#dc2626;color:#fff;border-color:#dc2626;" tooltip="Deauthorise" wire:click="deauthorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
-                                    @endif
-                                    <flux:button size="xs" icon="pencil" tooltip="Edit Member" wire:click="editMemberModal('{{ $member['address'] ?? $member['id'] }}')" />
-                                    <flux:button size="xs" icon="trash" style="background:#18181b;color:#fff;border-color:#18181b;" tooltip="Delete" wire:click="confirmDeleteMember('{{ $member['address'] ?? $member['id'] }}')" />
-                                </div>
-                            </flux:table.cell>
+                            @if (auth()->user()->canManageNetworks())
+                                <flux:table.cell>
+                                    <div class="flex gap-1">
+                                        @if (! ($member['authorized'] ?? false))
+                                            <flux:button size="xs" icon="check" style="background:#16a34a;color:#fff;border-color:#16a34a;" tooltip="Authorise" wire:click="authorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
+                                        @else
+                                            <flux:button size="xs" icon="x-mark" style="background:#dc2626;color:#fff;border-color:#dc2626;" tooltip="Deauthorise" wire:click="deauthorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
+                                        @endif
+                                        <flux:button size="xs" icon="pencil" tooltip="Edit Member" wire:click="editMemberModal('{{ $member['address'] ?? $member['id'] }}')" />
+                                        <flux:button size="xs" icon="trash" style="background:#18181b;color:#fff;border-color:#18181b;" tooltip="Delete" wire:click="confirmDeleteMember('{{ $member['address'] ?? $member['id'] }}')" />
+                                    </div>
+                                </flux:table.cell>
+                            @endif
                         </flux:table.row>
                     @endforeach
                     </flux:table.rows>

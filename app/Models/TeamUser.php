@@ -22,6 +22,12 @@ class TeamUser extends Model
         static::creating(function ($model) {
             $model->id = Str::uuid7();
         });
+
+        static::saving(function ($model) {
+            if ($model->team_id === config('wiretier.admin_team') && $model->role !== 'admin') {
+                throw new \DomainException('Only the admin role is allowed on the admin team.');
+            }
+        });
     }
 
     public function team(): BelongsTo

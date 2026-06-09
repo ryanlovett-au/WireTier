@@ -196,21 +196,24 @@ test('removeUser requires admin role', function () {
     $this->actingAs($this->alphaMember);
     session()->forget('current_team');
 
-    $viewerExists = TeamUser::where('user_id', $this->alphaViewer->id)
-        ->where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)->exists();
-
     Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ALPHA_TEAM_ID])
         ->set('remove_team_user', $this->alphaViewer->id)
         ->call('removeUser');
 
-    try {
-        expect(TeamUser::where('user_id', $this->alphaViewer->id)
-            ->where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)->exists())->toBeTrue(
-                'Member was able to remove another user'
-            );
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: removeUser() has no admin role check — any team member can remove other members');
-    }
+    expect(TeamUser::where('user_id', $this->alphaViewer->id)
+        ->where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)->exists())->toBeTrue(
+            'Member was able to remove another user'
+        );
+});
+
+test('removeUserModal requires admin role', function () {
+    $this->actingAs($this->alphaViewer);
+    session()->forget('current_team');
+
+    $component = Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ALPHA_TEAM_ID])
+        ->call('removeUserModal', $this->alphaMember->id);
+
+    $component->assertSet('remove_team_user', '');
 });
 
 test('deleteTeam requires admin role', function () {
@@ -220,13 +223,9 @@ test('deleteTeam requires admin role', function () {
     Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ALPHA_TEAM_ID])
         ->call('deleteTeam');
 
-    try {
-        expect(Team::find(SecurityTestSeeder::ALPHA_TEAM_ID))->not->toBeNull(
-            'Member was able to delete the team'
-        );
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: deleteTeam() has no admin role check — any team member can delete the team');
-    }
+    expect(Team::find(SecurityTestSeeder::ALPHA_TEAM_ID))->not->toBeNull(
+        'Member was able to delete the team'
+    );
 });
 
 test('member cannot invite at admin role', function () {
@@ -243,11 +242,7 @@ test('member cannot invite at admin role', function () {
         ->where('role', 'admin')
         ->exists();
 
-    try {
-        expect($adminInvite)->toBeFalse('Member was able to create an admin invitation');
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: inviteTeam() has no role-based authorization — members can create admin-level invitations');
-    }
+    expect($adminInvite)->toBeFalse('Member was able to create an admin invitation');
 });
 
 test('member cannot change roles', function () {
@@ -264,11 +259,99 @@ test('member cannot change roles', function () {
 
     $viewerTu->refresh();
 
-    try {
-        expect($viewerTu->role)->toBe('viewer', 'Member was able to change another user\'s role');
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: changeRole() isTeamAdmin() check does not block members — members can escalate privileges');
-    }
+    expect($viewerTu->role)->toBe('viewer', 'Member was able to change another user\'s role');
+});
+
+test('viewer cannot cancel invitations', function () {
+    $this->actingAs($this->alphaViewer);
+    session()->forget('current_team');
+
+    $invitation = new TeamInvitation;
+    $invitation->team_id = SecurityTestSeeder::ALPHA_TEAM_ID;
+    $invitation->email = 'should-stay@example.com';
+    $invitation->role = 'member';
+    $invitation->save();
+
+    Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ALPHA_TEAM_ID])
+        ->call('cancelInvitation', $invitation->id);
+
+    expect(TeamInvitation::find($invitation->id))->not->toBeNull(
+        'Viewer was able to cancel an invitation'
+    );
+});
+
+test('member cannot cancel invitations', function () {
+    $this->actingAs($this->alphaMember);
+    session()->forget('current_team');
+
+    $invitation = new TeamInvitation;
+    $invitation->team_id = SecurityTestSeeder::ALPHA_TEAM_ID;
+    $invitation->email = 'should-stay@example.com';
+    $invitation->role = 'member';
+    $invitation->save();
+
+    Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ALPHA_TEAM_ID])
+        ->call('cancelInvitation', $invitation->id);
+
+    expect(TeamInvitation::find($invitation->id))->not->toBeNull(
+        'Member was able to cancel an invitation'
+    );
+});
+
+// ─── Security: Admin Team Role Constraint ────────────────────────────────
+
+test('TeamUser save rejects non-admin role on admin team', function () {
+    $orphan = User::where('email', 'orphan@security-test.local')->first();
+
+    expect(fn () => TeamUser::create([
+        'team_id' => SecurityTestSeeder::ADMIN_TEAM_ID,
+        'user_id' => $orphan->id,
+        'role' => 'viewer',
+    ]))->toThrow(DomainException::class);
+});
+
+test('TeamUser save allows admin role on admin team', function () {
+    $orphan = User::where('email', 'orphan@security-test.local')->first();
+
+    $tu = TeamUser::create([
+        'team_id' => SecurityTestSeeder::ADMIN_TEAM_ID,
+        'user_id' => $orphan->id,
+        'role' => 'admin',
+    ]);
+
+    expect($tu->exists)->toBeTrue();
+});
+
+test('changeRole rejects non-admin role on admin team', function () {
+    $superAdmin = User::where('email', 'superadmin@security-test.local')->first();
+    $this->actingAs($superAdmin);
+    session()->forget('current_team');
+
+    $adminTu = TeamUser::where('user_id', $superAdmin->id)
+        ->where('team_id', SecurityTestSeeder::ADMIN_TEAM_ID)->first();
+
+    Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ADMIN_TEAM_ID])
+        ->call('changeRoleModal', $adminTu->toArray())
+        ->set('change_user_role', 'viewer')
+        ->call('changeRole');
+
+    $adminTu->refresh();
+    expect($adminTu->role)->toBe('admin');
+});
+
+test('inviteTeam rejects non-admin role on admin team', function () {
+    $superAdmin = User::where('email', 'superadmin@security-test.local')->first();
+    $this->actingAs($superAdmin);
+    session()->forget('current_team');
+
+    Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ADMIN_TEAM_ID])
+        ->set('invite_team_email', 'newuser@example.com')
+        ->set('invite_team_role', 'viewer')
+        ->set('invite_team_expires', now()->addYear()->format('Y-m-d'))
+        ->call('inviteTeam');
+
+    expect(TeamInvitation::where('email', 'newuser@example.com')
+        ->where('team_id', SecurityTestSeeder::ADMIN_TEAM_ID)->exists())->toBeFalse();
 });
 
 // ─── Security: Data Exposure ─────────────────────────────────────────────

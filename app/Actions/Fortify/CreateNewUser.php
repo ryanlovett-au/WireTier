@@ -53,10 +53,18 @@ class CreateNewUser implements CreatesNewUsers
 
         foreach ($invitations as $invitation) {
             if (! $invitation->expired) {
+                $role = $invitation->role;
+
+                if ($invitation->team_id === config('wiretier.admin_team') && $role !== 'admin') {
+                    $invitation->delete();
+
+                    continue;
+                }
+
                 $teamUser = new TeamUser;
                 $teamUser->user_id = $user->id;
                 $teamUser->team_id = $invitation->team_id;
-                $teamUser->role = $invitation->role;
+                $teamUser->role = $role;
                 $teamUser->expires = $invitation->expires;
                 $teamUser->save();
 

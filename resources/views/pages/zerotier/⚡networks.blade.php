@@ -324,7 +324,7 @@ new #[Title('ZeroTier Networks')] class extends Component
 
     public function createNetwork(): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! auth()->user()->canManageNetworks()) {
             return;
         }
 
@@ -394,7 +394,7 @@ new #[Title('ZeroTier Networks')] class extends Component
 
     public function confirmDeleteNetwork(string $networkId, string $networkName): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! auth()->user()->canManageNetworks()) {
             return;
         }
 
@@ -405,7 +405,7 @@ new #[Title('ZeroTier Networks')] class extends Component
 
     public function deleteNetwork(): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! auth()->user()->canManageNetworks()) {
             return;
         }
 
@@ -446,7 +446,7 @@ new #[Title('ZeroTier Networks')] class extends Component
                 @endif
 
                 <flux:button size="sm" icon="arrow-path" wire:click="syncAndReload">Refresh</flux:button>
-                @if (auth()->user()->isTeamAdmin() && $tokens->count() > 0)
+                @if (auth()->user()->canManageNetworks() && $tokens->count() > 0)
                     <flux:button size="sm" icon="plus" variant="primary" wire:click="openCreateModal">Create Network</flux:button>
                 @endif
             </div>
@@ -567,7 +567,7 @@ new #[Title('ZeroTier Networks')] class extends Component
                             <flux:button size="sm" icon="users" :href="route('zerotier.members', ['networkId' => $network['nwid'] ?? $network['id'], 'tokenId' => $selectedToken])" wire:navigate>
                                 Members
                             </flux:button>
-                            @if (auth()->user()->isTeamAdmin())
+                            @if (auth()->user()->canManageNetworks())
                                 <flux:button size="sm" icon="cog-6-tooth" wire:click="$dispatch('open-network-edit', { networkId: '{{ $network['nwid'] ?? $network['id'] }}', tokenId: '{{ $selectedToken }}' })" tooltip="Network Settings" />
                                 <flux:button size="sm" icon="trash" variant="danger" wire:click="confirmDeleteNetwork('{{ $network['nwid'] ?? $network['id'] }}', {{ Js::from($network['name'] ?? '') }})" tooltip="Delete Network" />
                             @endif

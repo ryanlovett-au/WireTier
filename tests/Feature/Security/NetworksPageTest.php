@@ -170,8 +170,8 @@ test('saveNetwork updates network config via API and DB record', function () {
     $this->actingAs($this->alphaAdmin);
     session()->forget('current_team');
 
-    Livewire::test('pages::zerotier.networks')
-        ->set('selectedToken', SecurityTestSeeder::ALPHA_TOKEN_ID)
+    Livewire::test('pages::zerotier.network-edit-modal')
+        ->set('tokenId', SecurityTestSeeder::ALPHA_TOKEN_ID)
         ->set('editing_network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)
         ->set('edit_name', 'Updated Name')
         ->set('edit_private', false)
@@ -196,14 +196,13 @@ test('deleteNetwork removes via API and DB record', function () {
     expect(ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->exists())->toBeFalse();
 });
 
-test('openEditModal populates edit fields from API data', function () {
+test('open populates edit fields from API data', function () {
     defaultHttpFakes();
     $this->actingAs($this->alphaAdmin);
     session()->forget('current_team');
 
-    $component = Livewire::test('pages::zerotier.networks')
-        ->set('selectedToken', SecurityTestSeeder::ALPHA_TOKEN_ID)
-        ->call('openEditModal', SecurityTestSeeder::ALPHA_NETWORK_ID);
+    $component = Livewire::test('pages::zerotier.network-edit-modal')
+        ->call('open', SecurityTestSeeder::ALPHA_NETWORK_ID, SecurityTestSeeder::ALPHA_TOKEN_ID);
 
     $component->assertSet('editing_network_id', SecurityTestSeeder::ALPHA_NETWORK_ID);
     expect($component->get('edit_name'))->not->toBeEmpty();
@@ -217,7 +216,7 @@ test('addRoute and removeRoute manage route arrays', function () {
     $this->actingAs($this->alphaAdmin);
     session()->forget('current_team');
 
-    $component = Livewire::test('pages::zerotier.networks')
+    $component = Livewire::test('pages::zerotier.network-edit-modal')
         ->set('new_route_target', '192.168.1.0/24')
         ->set('new_route_via', '10.0.0.1')
         ->call('addRoute');
@@ -235,7 +234,7 @@ test('addIpPool and removeIpPool manage IP pool arrays', function () {
     $this->actingAs($this->alphaAdmin);
     session()->forget('current_team');
 
-    $component = Livewire::test('pages::zerotier.networks')
+    $component = Livewire::test('pages::zerotier.network-edit-modal')
         ->set('new_pool_start', '10.0.0.1')
         ->set('new_pool_end', '10.0.0.254')
         ->call('addIpPool');
@@ -246,6 +245,8 @@ test('addIpPool and removeIpPool manage IP pool arrays', function () {
     $component->call('removeIpPool', 0);
     expect($component->get('edit_ip_pools'))->toHaveCount(0);
 });
+
+// ─── Security: Authorization ─────────────────────────────────────────────
 
 test('viewer cannot create networks', function () {
     defaultHttpFakes();
@@ -259,14 +260,8 @@ test('viewer cannot create networks', function () {
         ->set('new_network_subnet', '10.42.0.0/24')
         ->call('createNetwork');
 
-    try {
-        expect(ZerotierNetwork::count())->toBe($countBefore);
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: createNetwork() isTeamAdmin() check does not block viewers — viewers can create networks');
-    }
+    expect(ZerotierNetwork::count())->toBe($countBefore);
 });
-
-// ─── Security: Authorization ─────────────────────────────────────────────
 
 test('viewer cannot save networks', function () {
     defaultHttpFakes();
@@ -276,19 +271,15 @@ test('viewer cannot save networks', function () {
     $alphaNetwork = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
     $originalName = $alphaNetwork->name;
 
-    Livewire::test('pages::zerotier.networks')
-        ->set('selectedToken', SecurityTestSeeder::ALPHA_TOKEN_ID)
+    Livewire::test('pages::zerotier.network-edit-modal')
+        ->set('tokenId', SecurityTestSeeder::ALPHA_TOKEN_ID)
         ->set('editing_network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)
         ->set('edit_name', 'HACKED BY VIEWER')
         ->call('saveNetwork');
 
     $alphaNetwork->refresh();
 
-    try {
-        expect($alphaNetwork->name)->toBe($originalName);
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: saveNetwork() isTeamAdmin() check does not block viewers — viewers can modify network configuration');
-    }
+    expect($alphaNetwork->name)->toBe($originalName);
 });
 
 test('viewer cannot delete networks', function () {
@@ -301,11 +292,65 @@ test('viewer cannot delete networks', function () {
         ->set('delete_network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)
         ->call('deleteNetwork');
 
-    try {
-        expect(ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->exists())->toBeTrue();
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: deleteNetwork() isTeamAdmin() check does not block viewers — viewers can delete networks');
-    }
+    expect(ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->exists())->toBeTrue();
+});
+
+test('member can create networks', function () {
+    defaultHttpFakes();
+    $this->actingAs($this->alphaMember);
+    session()->forget('current_team');
+
+    Livewire::test('pages::zerotier.networks')
+        ->set('new_network_name', 'Member Network')
+        ->set('new_network_subnet', '10.43.0.0/24')
+        ->call('createNetwork')
+        ->assertHasNoErrors();
+
+    expect(ZerotierNetwork::where('network_id', 'aaaa000001ffffff')->exists())->toBeTrue();
+});
+
+test('member can save networks', function () {
+    defaultHttpFakes();
+    $this->actingAs($this->alphaMember);
+    session()->forget('current_team');
+
+    Livewire::test('pages::zerotier.network-edit-modal')
+        ->set('tokenId', SecurityTestSeeder::ALPHA_TOKEN_ID)
+        ->set('editing_network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)
+        ->set('edit_name', 'Updated by Member')
+        ->call('saveNetwork')
+        ->assertHasNoErrors();
+
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+    expect($network->name)->toBe('Updated by Member');
+});
+
+test('member can delete networks', function () {
+    defaultHttpFakes();
+    $this->actingAs($this->alphaMember);
+    session()->forget('current_team');
+
+    Livewire::test('pages::zerotier.networks')
+        ->set('selectedToken', SecurityTestSeeder::ALPHA_TOKEN_ID)
+        ->set('delete_network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)
+        ->call('deleteNetwork');
+
+    expect(ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->exists())->toBeFalse();
+});
+
+test('member cannot move networks to another team', function () {
+    defaultHttpFakes();
+    $this->actingAs($this->alphaMember);
+    session()->forget('current_team');
+
+    Livewire::test('pages::zerotier.network-edit-modal')
+        ->set('tokenId', SecurityTestSeeder::ALPHA_TOKEN_ID)
+        ->set('editing_network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)
+        ->set('move_to_team_id', SecurityTestSeeder::BETA_TEAM_ID)
+        ->call('moveNetwork');
+
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+    expect($network->team_id)->toBe(SecurityTestSeeder::ALPHA_TEAM_ID);
 });
 
 // ─── Security: XSS ───────────────────────────────────────────────────────
@@ -330,8 +375,8 @@ test('saveNetwork scopes DB update by team_id', function () {
     $betaNetwork = ZerotierNetwork::where('network_id', SecurityTestSeeder::BETA_NETWORK_ID)->first();
     $originalName = $betaNetwork->name;
 
-    Livewire::test('pages::zerotier.networks')
-        ->set('selectedToken', SecurityTestSeeder::ALPHA_TOKEN_ID)
+    Livewire::test('pages::zerotier.network-edit-modal')
+        ->set('tokenId', SecurityTestSeeder::ALPHA_TOKEN_ID)
         ->set('editing_network_id', SecurityTestSeeder::BETA_NETWORK_ID)
         ->set('edit_name', 'HACKED')
         ->call('saveNetwork');
