@@ -18,11 +18,6 @@ test('Team has teamUsers relationship', function () {
     expect($team->teamUsers)->not->toBeEmpty();
 });
 
-test('Team has permissions relationship', function () {
-    $team = Team::find(SecurityTestSeeder::ALPHA_TEAM_ID);
-    expect($team->permissions)->not->toBeEmpty();
-});
-
 test('Team has zerotierNetworks relationship', function () {
     $team = Team::find(SecurityTestSeeder::ALPHA_TEAM_ID);
     expect($team->zerotierNetworks)->not->toBeEmpty();

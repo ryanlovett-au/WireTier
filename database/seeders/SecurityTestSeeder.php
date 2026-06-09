@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Team;
-use App\Models\TeamPermission;
 use App\Models\TeamUser;
 use App\Models\User;
 use App\Models\ZerotierNetwork;
@@ -89,11 +88,6 @@ class SecurityTestSeeder extends Seeder
         ]);
         TeamUser::create(['team_id' => self::ALPHA_TEAM_ID, 'user_id' => $alphaViewer->id, 'role' => 'viewer']);
 
-        // Alpha permissions
-        foreach (['manage_networks', 'create_networks', 'delete_networks', 'manage_members', 'manage_tokens', 'view_peers'] as $perm) {
-            TeamPermission::create(['team_id' => self::ALPHA_TEAM_ID, 'permission' => $perm]);
-        }
-
         // ZeroTier tokens are global (admin-managed, no team_id)
         DB::table('zerotier_tokens')->insert([
             'id' => self::ALPHA_TOKEN_ID,
@@ -138,11 +132,6 @@ class SecurityTestSeeder extends Seeder
             'current_team' => self::BETA_TEAM_ID,
         ]);
         TeamUser::create(['team_id' => self::BETA_TEAM_ID, 'user_id' => $betaMember->id, 'role' => 'member']);
-
-        // Beta permissions (limited — no delete_networks or manage_tokens)
-        foreach (['manage_networks', 'create_networks', 'manage_members', 'view_peers'] as $perm) {
-            TeamPermission::create(['team_id' => self::BETA_TEAM_ID, 'permission' => $perm]);
-        }
 
         DB::table('zerotier_tokens')->insert([
             'id' => self::BETA_TOKEN_ID,

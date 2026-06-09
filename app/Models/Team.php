@@ -35,11 +35,6 @@ class Team extends Model
         return $this->hasMany(TeamUser::class);
     }
 
-    public function permissions(): HasMany
-    {
-        return $this->hasMany(TeamPermission::class);
-    }
-
     public function zerotierNetworks(): HasMany
     {
         return $this->hasMany(ZerotierNetwork::class);

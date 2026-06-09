@@ -68,23 +68,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Team Permissions
-    |--------------------------------------------------------------------------
-    |
-    | Available permissions that can be toggled per team.
-    |
-    */
-    'permissions' => [
-        'manage_networks',
-        'create_networks',
-        'delete_networks',
-        'manage_members',
-        'manage_tokens',
-        'view_peers',
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
     | Last Team Member Grace Period
     |--------------------------------------------------------------------------
     |

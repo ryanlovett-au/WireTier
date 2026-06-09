@@ -2,7 +2,6 @@
 
 use App\Models\Team;
 use App\Models\TeamInvitation;
-use App\Models\TeamPermission;
 use App\Models\TeamUser;
 use App\Models\User;
 use Database\Seeders\SecurityTestSeeder;
@@ -150,7 +149,6 @@ test('deleteTeam removes team and all related records', function () {
 
     expect(Team::find(SecurityTestSeeder::ALPHA_TEAM_ID))->toBeNull();
     expect(TeamUser::where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)->count())->toBe(0);
-    expect(TeamPermission::where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)->count())->toBe(0);
 });
 
 test('cancelInvitation removes invitation', function () {
@@ -167,27 +165,6 @@ test('cancelInvitation removes invitation', function () {
         ->call('cancelInvitation', $invitation->id);
 
     expect(TeamInvitation::find($invitation->id))->toBeNull();
-});
-
-test('updatePermission toggles permission on and off', function () {
-    $this->actingAs($this->superAdmin = User::where('email', 'superadmin@security-test.local')->first());
-    session()->forget('current_team');
-
-    $component = Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ALPHA_TEAM_ID]);
-
-    // Check if manage_tokens is currently in permissions, then toggle
-    $permissions = $component->get('permissions');
-    $hadManageTokens = in_array('manage_tokens', $permissions);
-
-    $component->call('updatePermission', 'manage_tokens');
-
-    if ($hadManageTokens) {
-        expect(TeamPermission::where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)
-            ->where('permission', 'manage_tokens')->exists())->toBeFalse();
-    } else {
-        expect(TeamPermission::where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)
-            ->where('permission', 'manage_tokens')->exists())->toBeTrue();
-    }
 });
 
 // ─── Security: Authorization ─────────────────────────────────────────────

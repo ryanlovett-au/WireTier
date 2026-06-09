@@ -129,7 +129,7 @@ class Security_Audit extends Command
     {
         $files = $this->get_zerotier_blade_files();
         $lifecycle = ['mount', 'render', 'boot', 'booted', 'hydrate', 'dehydrate', 'updating', 'updated'];
-        $authPatterns = ['isAdmin()', 'isTeamAdmin()', 'abort(403)', 'abort_unless(', 'TeamPermission::check('];
+        $authPatterns = ['isAdmin()', 'isTeamAdmin()', 'canManageNetworks()', 'abort(403)', 'abort_unless('];
 
         foreach ($files as $file) {
             $content = File::get($file);

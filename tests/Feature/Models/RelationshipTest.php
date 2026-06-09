@@ -3,7 +3,6 @@
 use App\Models\AuditLog;
 use App\Models\Team;
 use App\Models\TeamInvitation;
-use App\Models\TeamPermission;
 use App\Models\ZerotierNetwork;
 use App\Models\ZerotierToken;
 use Database\Seeders\SecurityTestSeeder;
@@ -30,11 +29,6 @@ test('TeamInvitation belongs to team', function () {
     ]);
     expect($invitation->team)->toBeInstanceOf(Team::class);
     expect($invitation->team->id)->toBe(SecurityTestSeeder::ALPHA_TEAM_ID);
-});
-
-test('TeamPermission belongs to team', function () {
-    $perm = TeamPermission::where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)->first();
-    expect($perm->team)->toBeInstanceOf(Team::class);
 });
 
 test('ZerotierNetwork belongs to team', function () {

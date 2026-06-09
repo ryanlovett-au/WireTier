@@ -8,6 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
+        Schema::dropIfExists('team_permissions');
+    }
+
+    public function down(): void
+    {
         Schema::create('team_permissions', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->foreignUuid('team_id');
@@ -16,10 +21,5 @@ return new class extends Migration
 
             $table->index('team_id');
         });
-    }
-
-    public function down(): void
-    {
-        Schema::dropIfExists('team_permissions');
     }
 };

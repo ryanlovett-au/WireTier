@@ -2,7 +2,6 @@
 
 use App\Models\Team;
 use App\Models\TeamInvitation;
-use App\Models\TeamPermission;
 use App\Models\TeamUser;
 use App\Models\User;
 use App\Models\ZerotierNetwork;
@@ -55,21 +54,6 @@ test('TeamInvitation model has explicit fillable or restrictive guarded', functi
         );
     } catch (Throwable $e) {
         $this->markTestSkipped('SECURITY EXPOSURE: TeamInvitation model uses $guarded = [] — role and team_id can be mass-assigned');
-    }
-});
-
-test('TeamPermission model has explicit fillable or restrictive guarded', function () {
-    $model = new TeamPermission;
-
-    try {
-        $hasFillable = ! empty($model->getFillable());
-        $hasRestrictiveGuarded = $model->getGuarded() !== [];
-
-        expect($hasFillable || $hasRestrictiveGuarded)->toBeTrue(
-            'TeamPermission model uses $guarded = [] with no $fillable'
-        );
-    } catch (Throwable $e) {
-        $this->markTestSkipped('SECURITY EXPOSURE: TeamPermission model uses $guarded = [] — permission and team_id can be mass-assigned');
     }
 });
 

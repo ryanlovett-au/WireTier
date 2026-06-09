@@ -5,10 +5,8 @@ use App\Mail\TeamInviteUser;
 use App\Models\AuditLog;
 use App\Models\Team;
 use App\Models\TeamInvitation;
-use App\Models\TeamPermission;
 use App\Models\TeamUser;
 use App\Models\User;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -59,8 +57,6 @@ new #[Title('Team Settings')] class extends Component
 
     public string $remove_team_user_name = '';
 
-    public array $permissions = [];
-
     public function mount(?string $id = null)
     {
         $teamId = $id ?? auth()->user()->current_team;
@@ -84,10 +80,6 @@ new #[Title('Team Settings')] class extends Component
 
         if (request()->query('action') === 'admin') {
             $this->action = 'admin';
-        }
-
-        if (auth()->user()->isAdmin()) {
-            $this->permissions = TeamPermission::where('team_id', $this->current_team->id)->pluck('permission')->toArray();
         }
 
         AuditLog::record('team.settings_viewed', 'team', $this->current_team->id);
@@ -313,7 +305,6 @@ new #[Title('Team Settings')] class extends Component
 
         TeamUser::where('team_id', $this->current_team->id)->delete();
         TeamInvitation::where('team_id', $this->current_team->id)->delete();
-        TeamPermission::where('team_id', $this->current_team->id)->delete();
         Team::where('id', $this->current_team->id)->delete();
         AuditLog::record('team.deleted', 'team', $this->current_team->id, ['name' => $this->current_team->name]);
 
@@ -331,21 +322,6 @@ new #[Title('Team Settings')] class extends Component
         Flux::toast(variant: 'success', heading: 'Cancelled', text: 'The invitation has been cancelled.');
     }
 
-    public function updatePermission($permission): void
-    {
-        if (in_array($permission, $this->permissions)) {
-            TeamPermission::where('team_id', $this->current_team->id)->where('permission', $permission)->delete();
-        } else {
-            $perm = new TeamPermission;
-            $perm->team_id = $this->current_team->id;
-            $perm->permission = $permission;
-            $perm->save();
-        }
-
-        $this->permissions = TeamPermission::where('team_id', $this->current_team->id)->pluck('permission')->toArray();
-        AuditLog::record('team.permission_updated', 'team', $this->current_team->id, ['permission' => $permission, 'enabled' => in_array($permission, $this->permissions)]);
-        Cache::forget('team_'.$this->current_team->id.'_permissions');
-    }
 }; ?>
 
 <section class="w-full">
@@ -489,29 +465,6 @@ new #[Title('Team Settings')] class extends Component
             </div>
         </flux:card>
 
-        {{-- Permissions (Admin only) --}}
-        @if (auth()->user()->isAdmin())
-        <flux:card class="mb-6">
-            <flux:heading class="mb-4">Team Permissions</flux:heading>
-            <flux:subheading class="mb-4">Manage the permissions for this team.</flux:subheading>
-
-            <flux:fieldset>
-                <div class="space-y-3">
-                @foreach (config('wiretier.permissions') as $permission)
-                    <flux:separator variant="subtle" />
-                    <flux:switch
-                        label="{{ ucwords(str_replace('_', ' ', $permission)) }}"
-                        :checked="in_array($permission, $this->permissions)"
-                        wire:change="updatePermission('{{ $permission }}')"
-                    />
-                    @if ($loop->last)
-                        <flux:separator variant="subtle" />
-                    @endif
-                @endforeach
-                </div>
-            </flux:fieldset>
-        </flux:card>
-        @endif
         @endif
 
         {{-- Leave Team --}}
