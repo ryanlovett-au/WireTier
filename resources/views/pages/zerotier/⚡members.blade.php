@@ -383,16 +383,16 @@ new #[Title('Network Members')] class extends Component
             </flux:card>
         @else
             <flux:card>
-                <flux:table>
+                <flux:table class="w-full">
                     <flux:table.columns>
-                        <flux:table.column sortable :sorted="$sortBy === 'name'" :direction="$sortDirection" wire:click="sort('name')">Member</flux:table.column>
-                        <flux:table.column sortable :sorted="$sortBy === 'ip'" :direction="$sortDirection" wire:click="sort('ip')">IP Assignments</flux:table.column>
-                        <flux:table.column sortable :sorted="$sortBy === 'authorised'" :direction="$sortDirection" wire:click="sort('authorised')">Authorised</flux:table.column>
-                        <flux:table.column>Bridge</flux:table.column>
-                        <flux:table.column sortable :sorted="$sortBy === 'last_seen'" :direction="$sortDirection" wire:click="sort('last_seen')">Last Seen</flux:table.column>
-                        <flux:table.column>Version / IP / Latency</flux:table.column>
+                        <flux:table.column class="w-[20%]" sortable :sorted="$sortBy === 'name'" :direction="$sortDirection" wire:click="sort('name')">Member</flux:table.column>
+                        <flux:table.column class="w-[14%]" sortable :sorted="$sortBy === 'ip'" :direction="$sortDirection" wire:click="sort('ip')">IP Assignments</flux:table.column>
+                        <flux:table.column class="w-[11%]" sortable :sorted="$sortBy === 'authorised'" :direction="$sortDirection" wire:click="sort('authorised')">Authorised</flux:table.column>
+                        <flux:table.column class="w-[8%]">Bridge</flux:table.column>
+                        <flux:table.column class="w-[12%]" sortable :sorted="$sortBy === 'last_seen'" :direction="$sortDirection" wire:click="sort('last_seen')">Last Seen</flux:table.column>
+                        <flux:table.column class="w-[22%]">Version / IP / Latency</flux:table.column>
                         @if (auth()->user()->canManageNetworks())
-                            <flux:table.column>Actions</flux:table.column>
+                            <flux:table.column class="w-[13%]">Actions</flux:table.column>
                         @endif
                     </flux:table.columns>
                     <flux:table.rows>
@@ -400,10 +400,14 @@ new #[Title('Network Members')] class extends Component
                         <flux:table.row :key="$member['address'] ?? $member['id'] ?? $loop->index">
                             <flux:table.cell>
                                 @if (! empty($member['name']))
-                                    <div class="text-sm font-medium">{{ $member['name'] }}</div>
+                                    <flux:tooltip :content="$member['name']" class="block min-w-0">
+                                        <div class="text-sm font-medium truncate">{{ $member['name'] }}</div>
+                                    </flux:tooltip>
                                 @endif
                                 @if (! empty($member['description']))
-                                    <div class="text-xs text-zinc-400">{{ $member['description'] }}</div>
+                                    <flux:tooltip :content="$member['description']" class="block min-w-0">
+                                        <div class="text-xs text-zinc-400 truncate">{{ $member['description'] }}</div>
+                                    </flux:tooltip>
                                 @endif
                                 <div class="font-mono text-xs text-zinc-400">{{ $member['address'] ?? '—' }}</div>
                             </flux:table.cell>
@@ -445,7 +449,9 @@ new #[Title('Network Members')] class extends Component
                                     <div>v{{ $member['_version'] }}</div>
                                 @endif
                                 @if (! empty($member['_physicalAddr']))
-                                    <div class="font-mono">{{ $member['_physicalAddr'] }}</div>
+                                    <flux:tooltip :content="$member['_physicalAddr']" class="block min-w-0">
+                                        <div class="font-mono truncate">{{ $member['_physicalAddr'] }}</div>
+                                    </flux:tooltip>
                                 @endif
                                 @php $latency = $member['_latency'] ?? -1; @endphp
                                 @if ($latency > 0)
