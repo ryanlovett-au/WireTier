@@ -152,6 +152,7 @@ new #[Title('Network Members')] class extends Component
                     'ipAssignments' => $m->ip_assignments ?? [],
                     '_version' => $m->client_version,
                     '_online' => $m->is_online,
+                    'lastOnline' => $m->last_seen ? $m->last_seen->timestamp * 1000 : 0,
                     '_latency' => $m->latency,
                     '_physicalAddr' => $m->physical_address,
                     '_synced_at' => $m->synced_at?->diffForHumans(),

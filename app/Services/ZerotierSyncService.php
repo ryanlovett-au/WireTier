@@ -85,17 +85,27 @@ class ZerotierSyncService
             foreach ($apiMembers as $nodeId => $revision) {
                 [$isOnline, $latency, $physicalAddress] = self::resolvePeerState($nodeId, $controllerAddress, $peers);
 
+                // Stamp last_seen whenever we observe the member online; leave it
+                // untouched otherwise so the "last seen X ago" value persists once
+                // the member goes offline. The controller API has no last-online
+                // field of its own, so this observed timestamp is the only source.
+                $runtime = [
+                    'is_online' => $isOnline,
+                    'latency' => $latency,
+                    'physical_address' => $physicalAddress,
+                    'synced_at' => now(),
+                ];
+
+                if ($isOnline) {
+                    $runtime['last_seen'] = now();
+                }
+
                 // Config unchanged: refresh only the volatile runtime fields (from
                 // the single peer call) — no per-member detail request needed.
                 if (isset($knownRevisions[$nodeId]) && (int) $knownRevisions[$nodeId] === (int) $revision) {
                     ZerotierMember::where('zerotier_network_id', $network->id)
                         ->where('node_id', $nodeId)
-                        ->update([
-                            'is_online' => $isOnline,
-                            'latency' => $latency,
-                            'physical_address' => $physicalAddress,
-                            'synced_at' => now(),
-                        ]);
+                        ->update($runtime);
 
                     continue;
                 }
@@ -123,10 +133,7 @@ class ZerotierSyncService
                             'ip_assignments' => $memberData['ipAssignments'] ?? [],
                             'client_version' => $version,
                             'revision' => $memberData['revision'] ?? $revision,
-                            'is_online' => $isOnline,
-                            'latency' => $latency,
-                            'physical_address' => $physicalAddress,
-                            'synced_at' => now(),
+                            ...$runtime,
                         ]
                     );
                 } catch (\Exception $e) {

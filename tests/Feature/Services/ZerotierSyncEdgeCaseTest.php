@@ -307,6 +307,72 @@ test('syncNetwork re-fetches a member when its revision changes', function () {
     expect($member->revision)->toBe(8);
 });
 
+test('syncNetwork stamps last_seen for an online member', function () {
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+
+    Http::fake(function ($request) {
+        $url = $request->url();
+        if (preg_match('#/member/([a-f0-9]+)$#', $url, $m)) {
+            return Http::response(['address' => $m[1], 'authorized' => true, 'revision' => 3]);
+        }
+        if (str_contains($url, '/member')) {
+            return Http::response(['dddd000001' => 3]);
+        }
+        if (preg_match('#/controller/network/([a-zA-Z0-9_]+)$#', $url, $m)) {
+            return Http::response(['nwid' => $m[1], 'name' => 'Net', 'private' => true]);
+        }
+        if (str_contains($url, '/peer')) {
+            return Http::response([
+                ['address' => 'dddd000001', 'latency' => 5, 'paths' => [['active' => true, 'address' => '1.2.3.4/9993']]],
+            ]);
+        }
+
+        return Http::response([]);
+    });
+
+    ZerotierSyncService::syncNetwork($network);
+
+    $member = ZerotierMember::where('zerotier_network_id', $network->id)->where('node_id', 'dddd000001')->first();
+    expect($member->is_online)->toBeTrue();
+    expect($member->last_seen)->not->toBeNull();
+});
+
+test('syncNetwork preserves last_seen when a member is offline', function () {
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+
+    $seenAt = now()->subHours(3);
+    ZerotierMember::create([
+        'zerotier_network_id' => $network->id,
+        'node_id' => 'dddd000001',
+        'authorised' => true,
+        'revision' => 3,
+        'last_seen' => $seenAt,
+    ]);
+
+    Http::fake(function ($request) {
+        $url = $request->url();
+        // Member unchanged (revision 3) and absent from the peer list => offline.
+        if (str_contains($url, '/member')) {
+            return Http::response(['dddd000001' => 3]);
+        }
+        if (preg_match('#/controller/network/([a-zA-Z0-9_]+)$#', $url, $m)) {
+            return Http::response(['nwid' => $m[1], 'name' => 'Net', 'private' => true]);
+        }
+        if (str_contains($url, '/peer')) {
+            return Http::response([]);
+        }
+
+        return Http::response([]);
+    });
+
+    ZerotierSyncService::syncNetwork($network);
+
+    $member = ZerotierMember::where('zerotier_network_id', $network->id)->where('node_id', 'dddd000001')->first();
+    expect($member->is_online)->toBeFalse();
+    // The prior last_seen must persist rather than being cleared.
+    expect($member->last_seen->timestamp)->toBe($seenAt->timestamp);
+});
+
 test('syncNetwork debounces an interactive sync within the window', function () {
     config(['wiretier.sync_debounce_seconds' => 30]);
 
