@@ -6,11 +6,31 @@ use App\Services\ZerotierSyncService;
 use Database\Seeders\SecurityTestSeeder;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 
 beforeEach(function () {
     $this->seed(SecurityTestSeeder::class);
     config(['wiretier.admin_team' => SecurityTestSeeder::ADMIN_TEAM_ID]);
 });
+
+/** Fake responses for a healthy single-member sync of the given network. */
+function fakeHealthyController(): void
+{
+    Http::fake(function ($request) {
+        $url = $request->url();
+        if (preg_match('#/member/([a-f0-9]+)$#', $url, $m)) {
+            return Http::response(['address' => $m[1], 'authorized' => true, 'ipAssignments' => []]);
+        }
+        if (str_contains($url, '/member')) {
+            return Http::response(['dddd000001' => true]);
+        }
+        if (preg_match('#/controller/network/([a-zA-Z0-9_]+)$#', $url, $m)) {
+            return Http::response(['nwid' => $m[1], 'name' => 'Net', 'private' => true]);
+        }
+
+        return Http::response([]);
+    });
+}
 
 test('syncNetwork returns false when token is inactive', function () {
     $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
@@ -96,6 +116,180 @@ test('syncNetwork identifies controller node as online', function () {
     expect($member)->not->toBeNull();
     expect($member->is_online)->toBeTrue();
     expect($member->latency)->toBe(0);
+});
+
+test('syncNetwork does not wipe members when the member list fetch fails', function () {
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+
+    // Two members from a previous good sync already in the DB.
+    ZerotierMember::create(['zerotier_network_id' => $network->id, 'node_id' => 'dddd000001', 'authorised' => true]);
+    ZerotierMember::create(['zerotier_network_id' => $network->id, 'node_id' => 'eeee000001', 'authorised' => true]);
+
+    Http::fake(function ($request) {
+        $url = $request->url();
+        // The member list endpoint fails (transient error / rate limit).
+        if (str_contains($url, '/member')) {
+            return Http::response('error', 500);
+        }
+        if (preg_match('#/controller/network/([a-zA-Z0-9_]+)$#', $url, $m)) {
+            return Http::response(['nwid' => $m[1], 'name' => 'Net', 'private' => true]);
+        }
+        if (str_contains($url, '/peer')) {
+            return Http::response([]);
+        }
+
+        return Http::response([]);
+    });
+
+    Log::shouldReceive('warning')->atLeast()->once();
+
+    $result = ZerotierSyncService::syncNetwork($network);
+
+    // A failed list fetch must abort without touching existing members.
+    expect($result)->toBeFalse();
+    expect(ZerotierMember::where('zerotier_network_id', $network->id)->count())->toBe(2);
+});
+
+test('syncNetwork preserves a member whose detail fetch fails but is still listed', function () {
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+
+    ZerotierMember::create([
+        'zerotier_network_id' => $network->id,
+        'node_id' => 'dddd000001',
+        'name' => 'Existing Device',
+        'authorised' => true,
+    ]);
+
+    Http::fake(function ($request) {
+        $url = $request->url();
+        // The controller still lists the member, but its detail fetch is rate limited.
+        if (preg_match('#/member/([a-f0-9]+)$#', $url)) {
+            return Http::response('rate limited', 429);
+        }
+        if (str_contains($url, '/member')) {
+            return Http::response(['dddd000001' => true]);
+        }
+        if (preg_match('#/controller/network/([a-zA-Z0-9_]+)$#', $url, $m)) {
+            return Http::response(['nwid' => $m[1], 'name' => 'Net', 'private' => true]);
+        }
+        if (str_contains($url, '/peer')) {
+            return Http::response([]);
+        }
+
+        return Http::response([]);
+    });
+
+    Log::shouldReceive('warning')->atLeast()->once();
+
+    $result = ZerotierSyncService::syncNetwork($network);
+
+    expect($result)->toBeTrue();
+
+    // The member is still on the controller, so it must survive even though we
+    // couldn't refresh its details — the stale row stays intact.
+    $member = ZerotierMember::where('zerotier_network_id', $network->id)
+        ->where('node_id', 'dddd000001')->first();
+    expect($member)->not->toBeNull();
+    expect($member->name)->toBe('Existing Device');
+});
+
+test('syncNetwork removes members the controller no longer lists', function () {
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+
+    ZerotierMember::create(['zerotier_network_id' => $network->id, 'node_id' => 'dddd000001', 'authorised' => true]);
+    ZerotierMember::create(['zerotier_network_id' => $network->id, 'node_id' => 'eeee000001', 'authorised' => true]);
+
+    Http::fake(function ($request) {
+        $url = $request->url();
+        if (preg_match('#/member/([a-f0-9]+)$#', $url, $m)) {
+            return Http::response(['address' => $m[1], 'authorized' => true, 'ipAssignments' => []]);
+        }
+        // Controller now reports only dddd000001 — eeee000001 has genuinely left.
+        if (str_contains($url, '/member')) {
+            return Http::response(['dddd000001' => true]);
+        }
+        if (preg_match('#/controller/network/([a-zA-Z0-9_]+)$#', $url, $m)) {
+            return Http::response(['nwid' => $m[1], 'name' => 'Net', 'private' => true]);
+        }
+        if (str_contains($url, '/peer')) {
+            return Http::response([]);
+        }
+
+        return Http::response([]);
+    });
+
+    ZerotierSyncService::syncNetwork($network);
+
+    // Legitimate reconciliation still prunes departed members.
+    expect(ZerotierMember::where('zerotier_network_id', $network->id)->where('node_id', 'eeee000001')->exists())->toBeFalse();
+    expect(ZerotierMember::where('zerotier_network_id', $network->id)->where('node_id', 'dddd000001')->exists())->toBeTrue();
+});
+
+test('syncNetwork debounces an interactive sync within the window', function () {
+    config(['wiretier.sync_debounce_seconds' => 30]);
+
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+    $network->update(['synced_at' => now()]);
+
+    Http::fake();
+
+    // A recently-synced network is a no-op — the controller is never touched.
+    $result = ZerotierSyncService::syncNetwork($network);
+
+    expect($result)->toBeTrue();
+    Http::assertNothingSent();
+});
+
+test('syncNetwork force bypasses the debounce', function () {
+    config(['wiretier.sync_debounce_seconds' => 30]);
+
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+    $network->update(['synced_at' => now()]);
+
+    fakeHealthyController();
+
+    ZerotierSyncService::syncNetwork($network, force: true);
+
+    // A forced sync (e.g. after a member mutation) runs despite the debounce.
+    expect(ZerotierMember::where('zerotier_network_id', $network->id)->where('node_id', 'dddd000001')->exists())->toBeTrue();
+});
+
+test('system sync is not throttled by the interactive rate limiter', function () {
+    // Saturate the interactive bucket so an interactive call would be rejected.
+    for ($i = 0; $i < 120; $i++) {
+        RateLimiter::hit('zt_api:system', 60);
+    }
+
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+
+    fakeHealthyController();
+
+    $result = ZerotierSyncService::syncNetwork($network, system: true);
+
+    // The trusted background sync bypasses the limiter and completes.
+    expect($result)->toBeTrue();
+    expect(ZerotierMember::where('zerotier_network_id', $network->id)->where('node_id', 'dddd000001')->exists())->toBeTrue();
+});
+
+test('interactive sync is still throttled by the rate limiter', function () {
+    // Saturate the bucket (no authenticated user in this context => zt_api:system).
+    for ($i = 0; $i < 120; $i++) {
+        RateLimiter::hit('zt_api:system', 60);
+    }
+
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+    ZerotierMember::create(['zerotier_network_id' => $network->id, 'node_id' => 'dddd000001', 'authorised' => true]);
+
+    fakeHealthyController();
+
+    Log::shouldReceive('warning')->atLeast()->once();
+
+    // force:true to get past the debounce and actually attempt the throttled call.
+    $result = ZerotierSyncService::syncNetwork($network, force: true);
+
+    // The limiter trips inside client(); reconciliation must not wipe the member.
+    expect($result)->toBeFalse();
+    expect(ZerotierMember::where('zerotier_network_id', $network->id)->count())->toBe(1);
 });
 
 test('syncNetwork handles peer fetch failure gracefully', function () {

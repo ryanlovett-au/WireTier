@@ -16,7 +16,7 @@ class ZerotierSync extends Command
         $tokenId = $this->option('token');
 
         if ($tokenId) {
-            $synced = ZerotierSyncService::syncToken($tokenId);
+            $synced = ZerotierSyncService::syncToken($tokenId, system: true);
             $this->info("Synced {$synced} network(s) for token {$tokenId}.");
         } else {
             $synced = ZerotierSyncService::syncAll();

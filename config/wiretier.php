@@ -68,6 +68,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Sync Debounce
+    |--------------------------------------------------------------------------
+    |
+    | Minimum number of seconds between actual controller syncs for a single
+    | network. Interactive "Refresh" requests within this window are treated as
+    | no-ops and served from the last sync, so a user hammering Refresh cannot
+    | spam the controller API. Member mutations (authorise/delete/…) force a
+    | sync regardless. Set to 0 to disable.
+    |
+    */
+    'sync_debounce_seconds' => (int) env('WIRETIER_SYNC_DEBOUNCE', 15),
+
+    /*
+    |--------------------------------------------------------------------------
     | Last Team Member Grace Period
     |--------------------------------------------------------------------------
     |

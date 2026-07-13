@@ -367,7 +367,7 @@ new #[Title('ZeroTier Networks')] class extends Component
             $dbNetwork->config = $network;
             $dbNetwork->save();
 
-            ZerotierSyncService::syncNetwork($dbNetwork);
+            ZerotierSyncService::syncNetwork($dbNetwork, force: true);
 
             AuditLog::record('network.created', 'network', $dbNetwork->network_id, ['name' => $this->new_network_name, 'token' => $token->name]);
 

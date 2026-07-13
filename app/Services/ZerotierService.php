@@ -13,6 +13,13 @@ class ZerotierService
 
     protected string $token;
 
+    /**
+     * Whether the interactive per-user rate limit applies to this instance.
+     * The limit exists to stop a human spamming the UI; trusted background
+     * callers (the scheduled sync) opt out via withoutRateLimit().
+     */
+    protected bool $rateLimited = true;
+
     public function __construct(protected ZerotierToken $zerotierToken)
     {
         if (empty($zerotierToken->token)) {
@@ -37,16 +44,32 @@ class ZerotierService
         }
     }
 
+    /**
+     * Opt this instance out of the interactive per-user rate limit.
+     *
+     * Intended for trusted, non-interactive callers such as the scheduled
+     * sync, whose volume is bounded by its schedule and the per-network
+     * debounce rather than by the UI-abuse guard.
+     */
+    public function withoutRateLimit(): static
+    {
+        $this->rateLimited = false;
+
+        return $this;
+    }
+
     protected function client()
     {
-        $userId = auth()->id() ?? 'system';
-        $key = "zt_api:{$userId}";
+        if ($this->rateLimited) {
+            $userId = auth()->id() ?? 'system';
+            $key = "zt_api:{$userId}";
 
-        if (RateLimiter::tooManyAttempts($key, 120)) {
-            throw new \RuntimeException('Too many API requests. Please wait before trying again.');
+            if (RateLimiter::tooManyAttempts($key, 120)) {
+                throw new \RuntimeException('Too many API requests. Please wait before trying again.');
+            }
+
+            RateLimiter::hit($key, 60);
         }
-
-        RateLimiter::hit($key, 60);
 
         return Http::withHeaders([
             'X-ZT1-Auth' => $this->token,
@@ -126,7 +149,10 @@ class ZerotierService
     public function getNetworkMembers(string $networkId): array
     {
         self::validatePathSegment($networkId, 'networkId');
-        $response = $this->client()->get("/controller/network/{$networkId}/member");
+        // Throw on a failed response so callers can distinguish "controller
+        // reports zero members" from "the request failed" — the sync
+        // reconciliation must never treat a failure as an empty membership list.
+        $response = $this->client()->get("/controller/network/{$networkId}/member")->throw();
 
         return $response->json() ?? [];
     }
@@ -135,7 +161,7 @@ class ZerotierService
     {
         self::validatePathSegment($networkId, 'networkId');
         self::validatePathSegment($nodeId, 'nodeId');
-        $response = $this->client()->get("/controller/network/{$networkId}/member/{$nodeId}");
+        $response = $this->client()->get("/controller/network/{$networkId}/member/{$nodeId}")->throw();
 
         return $response->json();
     }

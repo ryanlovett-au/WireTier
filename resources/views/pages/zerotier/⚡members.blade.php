@@ -162,12 +162,12 @@ new #[Title('Network Members')] class extends Component
         $this->lastRefreshedAt = $dbNetwork->synced_at ? $dbNetwork->synced_at->timestamp : 0;
     }
 
-    public function syncAndReload(): void
+    public function syncAndReload(bool $force = false): void
     {
         $dbNetwork = $this->getDbNetwork();
 
         if ($dbNetwork) {
-            ZerotierSyncService::syncNetwork($dbNetwork);
+            ZerotierSyncService::syncNetwork($dbNetwork, force: $force);
             Cache::forget("network_{$dbNetwork->id}_members");
         }
 
@@ -199,7 +199,7 @@ new #[Title('Network Members')] class extends Component
             $this->getService()->authorizeMember($this->networkId, $nodeId);
             Flux::toast(variant: 'success', heading: 'Authorised', text: 'Member '.$nodeId.' has been authorised.');
             AuditLog::record('member.authorised', 'member', $nodeId, ['network_id' => $this->networkId]);
-            $this->syncAndReload();
+            $this->syncAndReload(force: true);
         } catch (Exception $e) {
             report($e);
             Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
@@ -216,7 +216,7 @@ new #[Title('Network Members')] class extends Component
             $this->getService()->deauthorizeMember($this->networkId, $nodeId);
             Flux::toast(variant: 'warning', heading: 'Deauthorised', text: 'Member '.$nodeId.' has been deauthorised.');
             AuditLog::record('member.deauthorised', 'member', $nodeId, ['network_id' => $this->networkId]);
-            $this->syncAndReload();
+            $this->syncAndReload(force: true);
         } catch (Exception $e) {
             report($e);
             Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
@@ -245,7 +245,7 @@ new #[Title('Network Members')] class extends Component
             Flux::toast(variant: 'success', heading: 'Deleted', text: 'Member has been removed.');
             AuditLog::record('member.deleted', 'member', $this->delete_member_id, ['network_id' => $this->networkId]);
             $this->delete_member_id = '';
-            $this->syncAndReload();
+            $this->syncAndReload(force: true);
         } catch (Exception $e) {
             report($e);
             Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
@@ -318,7 +318,7 @@ new #[Title('Network Members')] class extends Component
             Flux::modal('editMemberModal')->close();
             Flux::toast(variant: 'success', heading: 'Updated', text: 'Member settings have been updated.');
             AuditLog::record('member.updated', 'member', $this->edit_member_id, ['network_id' => $this->networkId, 'name' => $this->edit_member_name]);
-            $this->syncAndReload();
+            $this->syncAndReload(force: true);
         } catch (Exception $e) {
             report($e);
             Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
