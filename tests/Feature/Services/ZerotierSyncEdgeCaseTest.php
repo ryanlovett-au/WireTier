@@ -225,6 +225,88 @@ test('syncNetwork removes members the controller no longer lists', function () {
     expect(ZerotierMember::where('zerotier_network_id', $network->id)->where('node_id', 'dddd000001')->exists())->toBeTrue();
 });
 
+test('syncNetwork skips the detail fetch when a member revision is unchanged', function () {
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+
+    // Member already synced at revision 7.
+    ZerotierMember::create([
+        'zerotier_network_id' => $network->id,
+        'node_id' => 'dddd000001',
+        'name' => 'Cached Name',
+        'authorised' => true,
+        'revision' => 7,
+    ]);
+
+    $detailCalls = 0;
+    Http::fake(function ($request) use (&$detailCalls) {
+        $url = $request->url();
+        if (preg_match('#/member/([a-f0-9]+)$#', $url, $m)) {
+            $detailCalls++;
+
+            return Http::response(['address' => $m[1], 'authorized' => true, 'name' => 'CHANGED', 'revision' => 7]);
+        }
+        if (str_contains($url, '/member')) {
+            return Http::response(['dddd000001' => 7]); // unchanged revision
+        }
+        if (preg_match('#/controller/network/([a-zA-Z0-9_]+)$#', $url, $m)) {
+            return Http::response(['nwid' => $m[1], 'name' => 'Net', 'private' => true]);
+        }
+        if (str_contains($url, '/peer')) {
+            return Http::response([
+                ['address' => 'dddd000001', 'latency' => 12, 'paths' => [['active' => true, 'address' => '9.9.9.9/1']]],
+            ]);
+        }
+
+        return Http::response([]);
+    });
+
+    ZerotierSyncService::syncNetwork($network);
+
+    // No per-member detail request was made...
+    expect($detailCalls)->toBe(0);
+
+    $member = ZerotierMember::where('zerotier_network_id', $network->id)->where('node_id', 'dddd000001')->first();
+    // ...so config is left as-is...
+    expect($member->name)->toBe('Cached Name');
+    // ...but volatile runtime state is still refreshed from the single peer call.
+    expect($member->is_online)->toBeTrue();
+    expect($member->latency)->toBe(12);
+});
+
+test('syncNetwork re-fetches a member when its revision changes', function () {
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+
+    ZerotierMember::create([
+        'zerotier_network_id' => $network->id,
+        'node_id' => 'dddd000001',
+        'name' => 'Old Name',
+        'authorised' => false,
+        'revision' => 7,
+    ]);
+
+    Http::fake(function ($request) {
+        $url = $request->url();
+        if (preg_match('#/member/([a-f0-9]+)$#', $url, $m)) {
+            return Http::response(['address' => $m[1], 'authorized' => true, 'name' => 'New Name', 'revision' => 8]);
+        }
+        if (str_contains($url, '/member')) {
+            return Http::response(['dddd000001' => 8]); // bumped revision
+        }
+        if (preg_match('#/controller/network/([a-zA-Z0-9_]+)$#', $url, $m)) {
+            return Http::response(['nwid' => $m[1], 'name' => 'Net', 'private' => true]);
+        }
+
+        return Http::response([]);
+    });
+
+    ZerotierSyncService::syncNetwork($network);
+
+    $member = ZerotierMember::where('zerotier_network_id', $network->id)->where('node_id', 'dddd000001')->first();
+    expect($member->name)->toBe('New Name');
+    expect($member->authorised)->toBeTrue();
+    expect($member->revision)->toBe(8);
+});
+
 test('syncNetwork debounces an interactive sync within the window', function () {
     config(['wiretier.sync_debounce_seconds' => 30]);
 

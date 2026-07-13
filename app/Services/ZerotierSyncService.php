@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ZerotierMember;
 use App\Models\ZerotierNetwork;
 use App\Models\ZerotierToken;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -15,8 +16,9 @@ class ZerotierSyncService
      *
      * @param  bool  $system  Trusted background caller — bypasses the interactive per-user rate limit.
      * @param  bool  $force  Sync even if the network was synced within the debounce window.
+     * @param  ?Collection  $peers  Pre-fetched node-global peer list (keyed by address); fetched here if null.
      */
-    public static function syncNetwork(ZerotierNetwork $network, bool $system = false, bool $force = false): bool
+    public static function syncNetwork(ZerotierNetwork $network, bool $system = false, bool $force = false, ?Collection $peers = null): bool
     {
         $token = $network->zerotierToken;
 
@@ -56,38 +58,51 @@ class ZerotierSyncService
             // we get here $apiNodeIds is the controller's authoritative membership
             // list — an empty list means the controller genuinely has no members,
             // not that the call failed.
+            // The list maps node_id => config revision. The revision lets us skip
+            // the per-member detail fetch for members whose config is unchanged.
             $apiMembers = $service->getNetworkMembers($network->network_id);
             $apiNodeIds = array_keys($apiMembers);
 
-            // Get peer data for online status enrichment
-            $peers = collect();
+            // Peer data (online/latency/physical) is node-global and volatile, so
+            // it's fetched once per sync — by syncToken for a whole controller, or
+            // here for a standalone single-network sync.
+            if ($peers === null) {
+                $peers = collect();
 
-            try {
-                $peers = collect($service->getPeers())->keyBy('address');
-            } catch (\Exception) {
-                // Peer data is optional
+                try {
+                    $peers = collect($service->getPeers())->keyBy('address');
+                } catch (\Exception) {
+                    // Peer data is optional
+                }
             }
 
             $controllerAddress = substr($network->network_id, 0, 10);
 
-            foreach ($apiNodeIds as $nodeId) {
+            // Revisions we already hold, to decide which members actually changed.
+            $knownRevisions = ZerotierMember::where('zerotier_network_id', $network->id)
+                ->pluck('revision', 'node_id');
+
+            foreach ($apiMembers as $nodeId => $revision) {
+                [$isOnline, $latency, $physicalAddress] = self::resolvePeerState($nodeId, $controllerAddress, $peers);
+
+                // Config unchanged: refresh only the volatile runtime fields (from
+                // the single peer call) — no per-member detail request needed.
+                if (isset($knownRevisions[$nodeId]) && (int) $knownRevisions[$nodeId] === (int) $revision) {
+                    ZerotierMember::where('zerotier_network_id', $network->id)
+                        ->where('node_id', $nodeId)
+                        ->update([
+                            'is_online' => $isOnline,
+                            'latency' => $latency,
+                            'physical_address' => $physicalAddress,
+                            'synced_at' => now(),
+                        ]);
+
+                    continue;
+                }
+
+                // New or changed member: fetch the full config detail.
                 try {
                     $memberData = $service->getNetworkMember($network->network_id, $nodeId);
-
-                    // Determine online status from peer data
-                    $isOnline = false;
-                    $latency = -1;
-                    $physicalAddress = null;
-
-                    if ($nodeId === $controllerAddress) {
-                        $isOnline = true;
-                        $latency = 0;
-                    } elseif ($peer = $peers->get($nodeId)) {
-                        $activePaths = collect($peer['paths'] ?? [])->where('active', true);
-                        $isOnline = $activePaths->isNotEmpty();
-                        $latency = $peer['latency'] ?? -1;
-                        $physicalAddress = $activePaths->first()['address'] ?? ($peer['physicalAddress'] ?? null);
-                    }
 
                     // Build version string
                     $version = null;
@@ -107,6 +122,7 @@ class ZerotierSyncService
                             'no_auto_assign_ips' => $memberData['noAutoAssignIps'] ?? false,
                             'ip_assignments' => $memberData['ipAssignments'] ?? [],
                             'client_version' => $version,
+                            'revision' => $memberData['revision'] ?? $revision,
                             'is_online' => $isOnline,
                             'latency' => $latency,
                             'physical_address' => $physicalAddress,
@@ -141,6 +157,49 @@ class ZerotierSyncService
     }
 
     /**
+     * Resolve a member's volatile runtime state — [online, latency, physical
+     * address] — from the node-global peer list. These change every sync and
+     * are refreshed without a per-member detail request.
+     */
+    private static function resolvePeerState(string $nodeId, string $controllerAddress, Collection $peers): array
+    {
+        if ($nodeId === $controllerAddress) {
+            return [true, 0, null];
+        }
+
+        if ($peer = $peers->get($nodeId)) {
+            $activePaths = collect($peer['paths'] ?? [])->where('active', true);
+
+            return [
+                $activePaths->isNotEmpty(),
+                $peer['latency'] ?? -1,
+                $activePaths->first()['address'] ?? ($peer['physicalAddress'] ?? null),
+            ];
+        }
+
+        return [false, -1, null];
+    }
+
+    /**
+     * Fetch the node-global peer list for a token, keyed by address.
+     * Returns an empty collection on failure — peer data is optional enrichment.
+     */
+    private static function fetchPeers(ZerotierToken $token, bool $system): Collection
+    {
+        try {
+            $service = new ZerotierService($token);
+
+            if ($system) {
+                $service->withoutRateLimit();
+            }
+
+            return collect($service->getPeers())->keyBy('address');
+        } catch (\Exception) {
+            return collect();
+        }
+    }
+
+    /**
      * Sync all networks for a specific controller token.
      */
     public static function syncToken(string $tokenId, bool $system = false): int
@@ -148,8 +207,13 @@ class ZerotierSyncService
         $networks = ZerotierNetwork::where('zerotier_token_id', $tokenId)->get();
         $synced = 0;
 
+        // Fetch the node-global peer list once for the whole controller rather
+        // than once per network.
+        $token = ZerotierToken::find($tokenId);
+        $peers = ($token && $token->is_active) ? self::fetchPeers($token, $system) : collect();
+
         foreach ($networks as $network) {
-            if (self::syncNetwork($network, $system)) {
+            if (self::syncNetwork($network, $system, false, $peers)) {
                 $synced++;
             }
         }
