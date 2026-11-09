@@ -12,7 +12,7 @@ use App\Services\FlowRules\FlowRulesService;
  * counts columns from 0 on line 1 and from 1 on later lines.)
  */
 dataset('parity cases', function () {
-    $cases = json_decode(file_get_contents(__DIR__.'/../../Fixtures/flow-rules/parity.json'), true);
+    $cases = json_decode(file_get_contents(__DIR__.'/../Fixtures/flow-rules/parity.json'), true);
 
     foreach ($cases as $name => $case) {
         yield $name => [$case];
