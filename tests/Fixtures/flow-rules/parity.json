@@ -1,0 +1,831 @@
+{
+  "empty": {
+    "source": "",
+    "rules": [],
+    "capabilities": {},
+    "tags": {}
+  },
+  "only_comments": {
+    "source": "# nothing here\n   # indented comment\n",
+    "rules": [],
+    "capabilities": {},
+    "tags": {}
+  },
+  "central_default": {
+    "source": "# This is a default rule set that allows IPv4 and IPv6 traffic but otherwise\n# behaves like a standard Ethernet switch.\n\n#\n# Allow only IPv4, IPv4 ARP, and IPv6 Ethernet frames.\n#\ndrop\n\tnot ethertype ipv4\n\tand not ethertype arp\n\tand not ethertype ipv6\n;\n\n# Accept anything else. This is required since default is 'drop'.\naccept;\n",
+    "rules": [
+      {
+        "type": "MATCH_ETHERTYPE",
+        "not": true,
+        "or": false,
+        "etherType": 2048
+      },
+      {
+        "type": "MATCH_ETHERTYPE",
+        "not": true,
+        "or": false,
+        "etherType": 2054
+      },
+      {
+        "type": "MATCH_ETHERTYPE",
+        "not": true,
+        "or": false,
+        "etherType": 34525
+      },
+      {
+        "type": "ACTION_DROP"
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      }
+    ],
+    "capabilities": {},
+    "tags": {}
+  },
+  "capabilities_and_tags_example": {
+    "source": "# Drop all Ethernet frame types that are not IPv4 or IPv6\ndrop\n\tnot ethertype 0x0800 # IPv4\n\tnot ethertype 0x0806 # IPv4 ARP\n\tnot ethertype 0x86dd # IPv6\n;\n\n# Capability: outgoing SSH\ncap ssh\n\tid 1000\n\taccept\n\t\tipprotocol tcp\n\t\tdport 22\n\t;\n;\n\n# A tag indicating which department people belong to\ntag department\n\tid 1000\n\tenum 100 sales\n\tenum 200 marketing\n\tenum 300 accounting\n\tenum 400 engineering\n;\n\n# Accept all traffic between members of the same department\naccept\n\ttdiff department 0\n;\n\naccept;\n",
+    "rules": [
+      {
+        "type": "MATCH_ETHERTYPE",
+        "not": true,
+        "or": false,
+        "etherType": 2048
+      },
+      {
+        "type": "MATCH_ETHERTYPE",
+        "not": true,
+        "or": false,
+        "etherType": 2054
+      },
+      {
+        "type": "MATCH_ETHERTYPE",
+        "not": true,
+        "or": false,
+        "etherType": 34525
+      },
+      {
+        "type": "ACTION_DROP"
+      },
+      {
+        "type": "MATCH_TAGS_DIFFERENCE",
+        "not": false,
+        "or": false,
+        "id": 1000,
+        "value": 0
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      }
+    ],
+    "capabilities": {
+      "ssh": {
+        "id": 1000,
+        "default": false,
+        "rules": [
+          {
+            "type": "MATCH_IP_PROTOCOL",
+            "not": false,
+            "or": false,
+            "ipProtocol": 6
+          },
+          {
+            "type": "MATCH_IP_DEST_PORT_RANGE",
+            "not": false,
+            "or": false,
+            "start": 22,
+            "end": 22
+          },
+          {
+            "type": "ACTION_ACCEPT"
+          }
+        ]
+      }
+    },
+    "tags": {
+      "department": {
+        "id": 1000,
+        "default": null,
+        "enums": {
+          "sales": 100,
+          "marketing": 200,
+          "accounting": 300,
+          "engineering": 400
+        },
+        "flags": {}
+      }
+    }
+  },
+  "zt_and_mac": {
+    "source": "drop\n  ztsrc 89e92ceee5\n  or ztdest 0123456789\n  macsrc 01:23:45:67:89:AB\n  macdest 0123.4567.89ab\n;\naccept;",
+    "rules": [
+      {
+        "type": "MATCH_SOURCE_ZEROTIER_ADDRESS",
+        "not": false,
+        "or": false,
+        "zt": "89e92ceee5"
+      },
+      {
+        "type": "MATCH_DEST_ZEROTIER_ADDRESS",
+        "not": false,
+        "or": true,
+        "zt": "0123456789"
+      },
+      {
+        "type": "MATCH_MAC_SOURCE",
+        "not": false,
+        "or": false,
+        "mac": "01:23:45:67:89:ab"
+      },
+      {
+        "type": "MATCH_MAC_DEST",
+        "not": false,
+        "or": false,
+        "mac": "01:23:45:67:89:ab"
+      },
+      {
+        "type": "ACTION_DROP"
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      }
+    ],
+    "capabilities": {},
+    "tags": {}
+  },
+  "vlan_and_numbers": {
+    "source": "drop vlan 12 vlanpcp 3 vlandei 1 ethertype 0x86DD ipprotocol 17 ;\naccept ipprotocol icmp6 ethertype wol;\naccept;",
+    "rules": [
+      {
+        "type": "MATCH_VLAN_ID",
+        "not": false,
+        "or": false,
+        "vlanId": 12
+      },
+      {
+        "type": "MATCH_VLAN_PCP",
+        "not": false,
+        "or": false,
+        "vlanPcp": 3
+      },
+      {
+        "type": "MATCH_VLAN_DEI",
+        "not": false,
+        "or": false,
+        "vlanDei": 1
+      },
+      {
+        "type": "MATCH_ETHERTYPE",
+        "not": false,
+        "or": false,
+        "etherType": 34525
+      },
+      {
+        "type": "MATCH_IP_PROTOCOL",
+        "not": false,
+        "or": false,
+        "ipProtocol": 17
+      },
+      {
+        "type": "ACTION_DROP"
+      },
+      {
+        "type": "MATCH_IP_PROTOCOL",
+        "not": false,
+        "or": false,
+        "ipProtocol": 58
+      },
+      {
+        "type": "MATCH_ETHERTYPE",
+        "not": false,
+        "or": false,
+        "etherType": 2114
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      }
+    ],
+    "capabilities": {},
+    "tags": {}
+  },
+  "ip_matches": {
+    "source": "accept ipsrc 10.0.0.0/8 ipdest 192.168.1.10/32;\naccept ipsrc fd00::/8 not ipdest fe80::1/128;\naccept;",
+    "rules": [
+      {
+        "type": "MATCH_IPV4_SOURCE",
+        "not": false,
+        "or": false,
+        "ip": "10.0.0.0/8"
+      },
+      {
+        "type": "MATCH_IPV4_DEST",
+        "not": false,
+        "or": false,
+        "ip": "192.168.1.10/32"
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "MATCH_IPV6_SOURCE",
+        "not": false,
+        "or": false,
+        "ip": "fd00::/8"
+      },
+      {
+        "type": "MATCH_IPV6_DEST",
+        "not": true,
+        "or": false,
+        "ip": "fe80::1/128"
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      }
+    ],
+    "capabilities": {},
+    "tags": {}
+  },
+  "ports_and_ranges": {
+    "source": "accept ipprotocol tcp dport 80-443 sport 1024-65535;\ndrop framesize 0-63;\naccept iptos 0xfc 0x10-0x20;\naccept icmp 8 -1;\naccept icmp 3 4;\naccept;",
+    "rules": [
+      {
+        "type": "MATCH_IP_PROTOCOL",
+        "not": false,
+        "or": false,
+        "ipProtocol": 6
+      },
+      {
+        "type": "MATCH_IP_DEST_PORT_RANGE",
+        "not": false,
+        "or": false,
+        "start": 80,
+        "end": 443
+      },
+      {
+        "type": "MATCH_IP_SOURCE_PORT_RANGE",
+        "not": false,
+        "or": false,
+        "start": 1024,
+        "end": 65535
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "MATCH_FRAME_SIZE_RANGE",
+        "not": false,
+        "or": false,
+        "start": 0,
+        "end": 63
+      },
+      {
+        "type": "ACTION_DROP"
+      },
+      {
+        "type": "MATCH_IP_TOS",
+        "not": false,
+        "or": false,
+        "mask": 252,
+        "start": 16,
+        "end": 32
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "MATCH_ICMP",
+        "not": false,
+        "or": false,
+        "icmpType": 8,
+        "icmpCode": null
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "MATCH_ICMP",
+        "not": false,
+        "or": false,
+        "icmpType": 3,
+        "icmpCode": 4
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      }
+    ],
+    "capabilities": {},
+    "tags": {}
+  },
+  "characteristics": {
+    "source": "drop chr tcp_syn,tcp_ack;\ndrop chr inbound;\ndrop chr broadcast;\ndrop chr 5,6,7;\naccept;",
+    "rules": [
+      {
+        "type": "MATCH_CHARACTERISTICS",
+        "not": false,
+        "or": false,
+        "mask": "0000000000000012"
+      },
+      {
+        "type": "ACTION_DROP"
+      },
+      {
+        "type": "MATCH_CHARACTERISTICS",
+        "not": false,
+        "or": false,
+        "mask": "8000000000000000"
+      },
+      {
+        "type": "ACTION_DROP"
+      },
+      {
+        "type": "MATCH_CHARACTERISTICS",
+        "not": false,
+        "or": false,
+        "mask": "2000000000000000"
+      },
+      {
+        "type": "ACTION_DROP"
+      },
+      {
+        "type": "MATCH_CHARACTERISTICS",
+        "not": false,
+        "or": false,
+        "mask": "00000000000000e0"
+      },
+      {
+        "type": "ACTION_DROP"
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      }
+    ],
+    "capabilities": {},
+    "tags": {}
+  },
+  "random": {
+    "source": "accept random 0.5;\naccept random 2;\naccept random -1;\ndrop;",
+    "rules": [
+      {
+        "type": "MATCH_RANDOM",
+        "not": false,
+        "or": false,
+        "probability": 2147483647
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "MATCH_RANDOM",
+        "not": false,
+        "or": false,
+        "probability": 4294967295
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "MATCH_RANDOM",
+        "not": false,
+        "or": false,
+        "probability": 0
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "ACTION_DROP"
+      }
+    ],
+    "capabilities": {},
+    "tags": {}
+  },
+  "actions": {
+    "source": "tee -1 89e92ceee5 ipprotocol udp;\nwatch 128 0123456789;\nredirect 89e92ceee5 dport 53;\nbreak ethertype arp;\naccept;",
+    "rules": [
+      {
+        "type": "MATCH_IP_PROTOCOL",
+        "not": false,
+        "or": false,
+        "ipProtocol": 17
+      },
+      {
+        "type": "ACTION_TEE",
+        "address": "89e92ceee5",
+        "length": -1
+      },
+      {
+        "type": "ACTION_WATCH",
+        "address": "0123456789",
+        "length": 128
+      },
+      {
+        "type": "MATCH_IP_DEST_PORT_RANGE",
+        "not": false,
+        "or": false,
+        "start": 53,
+        "end": 53
+      },
+      {
+        "type": "ACTION_REDIRECT",
+        "address": "89e92ceee5"
+      },
+      {
+        "type": "MATCH_ETHERTYPE",
+        "not": false,
+        "or": false,
+        "etherType": 2054
+      },
+      {
+        "type": "ACTION_BREAK"
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      }
+    ],
+    "capabilities": {},
+    "tags": {}
+  },
+  "macros": {
+    "source": "macro allow_port($p)\n  accept ipprotocol tcp dport $p;\n;\nmacro block_arp\n  drop ethertype arp;\n;\ninclude allow_port(22)\ninclude allow_port(443)\ninclude block_arp\naccept;",
+    "rules": [
+      {
+        "type": "MATCH_IP_PROTOCOL",
+        "not": false,
+        "or": false,
+        "ipProtocol": 6
+      },
+      {
+        "type": "MATCH_IP_DEST_PORT_RANGE",
+        "not": false,
+        "or": false,
+        "start": 22,
+        "end": 22
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "MATCH_IP_PROTOCOL",
+        "not": false,
+        "or": false,
+        "ipProtocol": 6
+      },
+      {
+        "type": "MATCH_IP_DEST_PORT_RANGE",
+        "not": false,
+        "or": false,
+        "start": 443,
+        "end": 443
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "MATCH_ETHERTYPE",
+        "not": false,
+        "or": false,
+        "etherType": 2054
+      },
+      {
+        "type": "ACTION_DROP"
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      }
+    ],
+    "capabilities": {},
+    "tags": {}
+  },
+  "tags_flags_defaults": {
+    "source": "tag role\n  id 1\n  enum 1 admin\n  enum 2 user\n  default user\n;\ntag perms\n  id 2\n  flag 0 read\n  flag 1 write\n  flag read,write rw\n  default 0x3\n;\ntag level\n  id 3\n  default 7\n;\ntag none\n  id 4\n;\naccept teq role admin;\naccept tand perms write;\naccept tor perms rw;\naccept txor 2 1;\naccept tseq role 2 treq level 7;\ndrop;",
+    "rules": [
+      {
+        "type": "MATCH_TAGS_EQUAL",
+        "not": false,
+        "or": false,
+        "id": 1,
+        "value": 1
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "MATCH_TAGS_BITWISE_AND",
+        "not": false,
+        "or": false,
+        "id": 2,
+        "value": 2
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "MATCH_TAGS_BITWISE_OR",
+        "not": false,
+        "or": false,
+        "id": 2,
+        "value": 3
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "MATCH_TAGS_BITWISE_XOR",
+        "not": false,
+        "or": false,
+        "id": 2,
+        "value": 1
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "MATCH_TAG_SENDER",
+        "not": false,
+        "or": false,
+        "id": 1,
+        "value": 2
+      },
+      {
+        "type": "MATCH_TAG_RECEIVER",
+        "not": false,
+        "or": false,
+        "id": 3,
+        "value": 7
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      },
+      {
+        "type": "ACTION_DROP"
+      }
+    ],
+    "capabilities": {},
+    "tags": {
+      "role": {
+        "id": 1,
+        "default": 2,
+        "enums": {
+          "admin": 1,
+          "user": 2
+        },
+        "flags": {}
+      },
+      "perms": {
+        "id": 2,
+        "default": 3,
+        "enums": {},
+        "flags": {
+          "read": 1,
+          "write": 2,
+          "rw": 3
+        }
+      },
+      "level": {
+        "id": 3,
+        "default": 7,
+        "enums": {},
+        "flags": {}
+      },
+      "none": {
+        "id": 4,
+        "default": null,
+        "enums": {},
+        "flags": {}
+      }
+    }
+  },
+  "capabilities": {
+    "source": "cap web\n  id 10\n  default\n  accept ipprotocol tcp dport 80;\n  accept ipprotocol tcp dport 443;\n;\ncap dns\n  id 11\n  accept ipprotocol udp dport 53;\n;\ndrop;",
+    "rules": [
+      {
+        "type": "ACTION_DROP"
+      }
+    ],
+    "capabilities": {
+      "web": {
+        "id": 10,
+        "default": true,
+        "rules": [
+          {
+            "type": "MATCH_IP_PROTOCOL",
+            "not": false,
+            "or": false,
+            "ipProtocol": 6
+          },
+          {
+            "type": "MATCH_IP_DEST_PORT_RANGE",
+            "not": false,
+            "or": false,
+            "start": 80,
+            "end": 80
+          },
+          {
+            "type": "ACTION_ACCEPT"
+          },
+          {
+            "type": "MATCH_IP_PROTOCOL",
+            "not": false,
+            "or": false,
+            "ipProtocol": 6
+          },
+          {
+            "type": "MATCH_IP_DEST_PORT_RANGE",
+            "not": false,
+            "or": false,
+            "start": 443,
+            "end": 443
+          },
+          {
+            "type": "ACTION_ACCEPT"
+          }
+        ]
+      },
+      "dns": {
+        "id": 11,
+        "default": false,
+        "rules": [
+          {
+            "type": "MATCH_IP_PROTOCOL",
+            "not": false,
+            "or": false,
+            "ipProtocol": 17
+          },
+          {
+            "type": "MATCH_IP_DEST_PORT_RANGE",
+            "not": false,
+            "or": false,
+            "start": 53,
+            "end": 53
+          },
+          {
+            "type": "ACTION_ACCEPT"
+          }
+        ]
+      }
+    },
+    "tags": {}
+  },
+  "crlf_and_tabs": {
+    "source": "drop\r\n\tnot ethertype ipv4\r\n\tand not ethertype ipv6\r\n;\r\naccept;\r\n",
+    "rules": [
+      {
+        "type": "MATCH_ETHERTYPE",
+        "not": true,
+        "or": false,
+        "etherType": 2048
+      },
+      {
+        "type": "MATCH_ETHERTYPE",
+        "not": true,
+        "or": false,
+        "etherType": 34525
+      },
+      {
+        "type": "ACTION_DROP"
+      },
+      {
+        "type": "ACTION_ACCEPT"
+      }
+    ],
+    "capabilities": {},
+    "tags": {}
+  },
+  "case_insensitive_keywords": {
+    "source": "DROP NOT ETHERTYPE ipv4;\nAccept;",
+    "error": {
+      "line": 1,
+      "message": "Unrecognized action or directive in rule set."
+    }
+  },
+  "error_unknown_match": {
+    "source": "drop\n  nonsense 1\n;",
+    "error": {
+      "line": 2,
+      "message": "Unrecognized match type \"nonsense\"."
+    }
+  },
+  "error_missing_argument": {
+    "source": "drop ethertype;",
+    "error": {
+      "line": 1,
+      "message": "Missing argument(s) to match."
+    }
+  },
+  "error_bad_ip": {
+    "source": "accept ipsrc 10.0.0.1;",
+    "error": {
+      "line": 1,
+      "message": "Missing /bits netmask length designation in IP."
+    }
+  },
+  "error_bad_ip_family": {
+    "source": "accept ipsrc banana/8;",
+    "error": {
+      "line": 1,
+      "message": "Invalid IP address (not valid IPv4 or IPv6)."
+    }
+  },
+  "error_bad_mac": {
+    "source": "drop macsrc 01:23;",
+    "error": {
+      "line": 1,
+      "message": "Invalid MAC address."
+    }
+  },
+  "error_bad_range": {
+    "source": "accept dport 500-100;",
+    "error": {
+      "line": 1,
+      "message": "Invalid numeric range."
+    }
+  },
+  "error_bad_zt": {
+    "source": "drop ztsrc 1234;",
+    "error": {
+      "line": 1,
+      "message": "Invalid ZeroTier address."
+    }
+  },
+  "error_unknown_macro": {
+    "source": "include missing\naccept;",
+    "error": {
+      "line": 1,
+      "message": "Macro name not found."
+    }
+  },
+  "error_duplicate_tag": {
+    "source": "tag a\n  id 1\n;\ntag a\n  id 2\n;",
+    "error": {
+      "line": 4,
+      "message": "Multiple definition of tag name."
+    }
+  },
+  "error_reserved_tag_name": {
+    "source": "tag drop\n  id 1\n;",
+    "error": {
+      "line": 1,
+      "message": "Tag name is a reserved word."
+    }
+  },
+  "error_tag_missing_id": {
+    "source": "tag t\n  enum 1 one\n;",
+    "error": {
+      "line": 1,
+      "message": "Tag definition is missing a numeric ID."
+    }
+  },
+  "error_cap_duplicate_id": {
+    "source": "cap a\n  id 1\n;\ncap b\n  id 1\n;",
+    "error": {
+      "line": 5,
+      "message": "Duplicate capability ID."
+    }
+  },
+  "error_accept_semicolon_then_rules": {
+    "source": "accept;\ndrop not ethertype ipv4;",
+    "error": {
+      "line": 2,
+      "message": "Unrecognized match type \"drop\"."
+    }
+  },
+  "error_undefined_variable": {
+    "source": "macro m($a)\n  accept dport $b;\n;\ninclude m(1)",
+    "error": {
+      "line": 2,
+      "message": "Undefined variable name."
+    }
+  },
+  "error_unknown_action": {
+    "source": "allow ipprotocol tcp;",
+    "error": {
+      "line": 1,
+      "message": "Unrecognized action or directive in rule set."
+    }
+  },
+  "error_bad_tag_value": {
+    "source": "tag t\n  id 1\n;\naccept teq t banana;",
+    "error": {
+      "line": 4,
+      "message": "Invalid tag value or unrecognized flag/enum name."
+    }
+  },
+  "error_invalid_number": {
+    "source": "drop ethertype foo;",
+    "error": {
+      "line": 1,
+      "message": "Invalid numeric value."
+    }
+  }
+}

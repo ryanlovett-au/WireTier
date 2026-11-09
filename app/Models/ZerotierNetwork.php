@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\FlowRules\RulesFingerprint;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,7 +17,10 @@ class ZerotierNetwork extends Model
 
     public $incrementing = false;
 
-    protected $fillable = ['team_id', 'zerotier_token_id', 'network_id', 'name', 'description', 'private', 'config', 'synced_at'];
+    protected $fillable = [
+        'team_id', 'zerotier_token_id', 'network_id', 'name', 'description', 'private', 'config', 'synced_at',
+        'rules_source', 'rules_meta', 'rules_hash', 'rules_updated_at',
+    ];
 
     protected static function booted(): void
     {
@@ -31,7 +35,29 @@ class ZerotierNetwork extends Model
             'private' => 'boolean',
             'config' => 'array',
             'synced_at' => 'datetime',
+            'rules_meta' => 'array',
+            'rules_updated_at' => 'datetime',
         ];
+    }
+
+    /**
+     * How this network's live flow rules relate to the script WireTier holds:
+     *  - 'managed':   applied by WireTier and unchanged since
+     *  - 'drifted':   applied by WireTier, then changed outside it
+     *  - 'default':   never set; the controller's default accept-all rules
+     *  - 'unmanaged': set by another tool; WireTier has no script for them
+     *
+     * @param  ?array  $liveConfig  Controller network config; defaults to the last synced copy.
+     */
+    public function rulesState(?array $liveConfig = null): string
+    {
+        $live = $liveConfig ?? $this->config ?? [];
+
+        if ($this->rules_hash !== null) {
+            return RulesFingerprint::of($live) === $this->rules_hash ? 'managed' : 'drifted';
+        }
+
+        return RulesFingerprint::isDefault($live) ? 'default' : 'unmanaged';
     }
 
     public function members(): HasMany

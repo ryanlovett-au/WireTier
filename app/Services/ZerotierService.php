@@ -131,9 +131,10 @@ class ZerotierService
     public function updateNetwork(string $networkId, array $config): array
     {
         self::validatePathSegment($networkId, 'networkId');
-        $response = $this->client()->post("/controller/network/{$networkId}", $config);
+        // Throw on failure so a rejected write is never reported as saved.
+        $response = $this->client()->post("/controller/network/{$networkId}", $config)->throw();
 
-        return $response->json();
+        return $response->json() ?? [];
     }
 
     public function deleteNetwork(string $networkId): bool
@@ -170,9 +171,10 @@ class ZerotierService
     {
         self::validatePathSegment($networkId, 'networkId');
         self::validatePathSegment($nodeId, 'nodeId');
-        $response = $this->client()->post("/controller/network/{$networkId}/member/{$nodeId}", $config);
+        // Throw on failure so a rejected write is never reported as saved.
+        $response = $this->client()->post("/controller/network/{$networkId}/member/{$nodeId}", $config)->throw();
 
-        return $response->json();
+        return $response->json() ?? [];
     }
 
     public function authorizeMember(string $networkId, string $nodeId): array

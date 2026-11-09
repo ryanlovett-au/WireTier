@@ -43,6 +43,16 @@ new #[Title('Network Members')] class extends Component
 
     public bool $edit_no_auto_assign = false;
 
+    /** Capability IDs (as strings, from checkboxes) granted to the member being edited. */
+    public array $edit_capabilities = [];
+
+    /** Tag ID => value ('' = not set) for the member being edited. */
+    public array $edit_tags = [];
+
+    /** Capability/tag names from the network's rules script (see FlowRulesService). */
+    #[Locked]
+    public array $rules_meta = [];
+
     public string $new_ip = '';
 
     public string $sortBy = '';
@@ -139,7 +149,40 @@ new #[Title('Network Members')] class extends Component
                 'private' => $dbNetwork->private,
                 '_synced_at' => $dbNetwork->synced_at?->diffForHumans(),
             ]);
+            $this->rules_meta = $dbNetwork->rules_meta ?? [];
         }
+    }
+
+    /** Names for a member's capability IDs; IDs not in the rules script show as "#id". */
+    public function capabilityLabels(array $ids): array
+    {
+        $names = collect($this->rules_meta['capabilities'] ?? [])->mapWithKeys(fn ($c, $name) => [$c['id'] => $name]);
+
+        return array_map(fn ($id) => $names[$id] ?? "#{$id}", $ids);
+    }
+
+    /** "name=value" labels for a member's [[tagId, value], …], using enum names where known. */
+    public function tagLabels(array $tags): array
+    {
+        $defs = collect($this->rules_meta['tags'] ?? [])->mapWithKeys(fn ($t, $name) => [$t['id'] => ['name' => $name] + $t]);
+
+        return array_map(function ($pair) use ($defs) {
+            [$id, $value] = $pair;
+            $def = $defs[$id] ?? null;
+
+            if (! $def) {
+                return "#{$id}={$value}";
+            }
+
+            $enum = array_search($value, $def['enums'] ?? [], true);
+
+            return $def['name'].'='.($enum !== false ? $enum : $value);
+        }, $tags);
+    }
+
+    protected function hasRulesMeta(): bool
+    {
+        return ! empty($this->rules_meta['capabilities']) || ! empty($this->rules_meta['tags']);
     }
 
     public function loadMembers(): void
@@ -165,6 +208,8 @@ new #[Title('Network Members')] class extends Component
                     'activeBridge' => $m->active_bridge,
                     'noAutoAssignIps' => $m->no_auto_assign_ips,
                     'ipAssignments' => $m->ip_assignments ?? [],
+                    'capabilities' => $m->capabilities ?? [],
+                    'tags' => $m->tags ?? [],
                     '_version' => $m->client_version,
                     '_online' => $m->is_online,
                     'lastOnline' => $m->last_seen ? $m->last_seen->timestamp * 1000 : 0,
@@ -297,8 +342,50 @@ new #[Title('Network Members')] class extends Component
         $this->edit_ip_assignments = $member->ip_assignments ?? [];
         $this->edit_active_bridge = $member->active_bridge;
         $this->edit_no_auto_assign = $member->no_auto_assign_ips;
+        $this->edit_capabilities = array_map('strval', $member->capabilities ?? []);
+        $this->edit_tags = collect($member->tags ?? [])
+            ->mapWithKeys(fn ($pair) => [(string) $pair[0] => (string) $pair[1]])
+            ->all();
         $this->new_ip = '';
         Flux::modal('editMemberModal')->show();
+    }
+
+    /**
+     * Capabilities and tags to send for the member being edited. Only IDs the
+     * rules script defines are editable; any other IDs the member already holds
+     * (e.g. set by another tool) are preserved untouched.
+     *
+     * @return array{capabilities: list<int>, tags: list<array{0: int, 1: int}>}
+     */
+    protected function memberRulesPayload(): array
+    {
+        $member = ZerotierMember::where('zerotier_network_id', $this->getDbNetwork()?->id)
+            ->where('node_id', $this->edit_member_id)
+            ->first();
+
+        $knownCaps = collect($this->rules_meta['capabilities'] ?? [])->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $knownTags = collect($this->rules_meta['tags'] ?? [])->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        $capabilities = collect($member?->capabilities ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->reject(fn ($id) => in_array($id, $knownCaps, true))
+            ->merge(collect($this->edit_capabilities)->map(fn ($id) => (int) $id)->filter(fn ($id) => in_array($id, $knownCaps, true)))
+            ->unique()->sort()->values()->all();
+
+        $tags = collect($member?->tags ?? [])
+            ->reject(fn ($pair) => in_array((int) $pair[0], $knownTags, true))
+            ->map(fn ($pair) => [(int) $pair[0], (int) $pair[1]])
+            ->values()->all();
+
+        foreach ($knownTags as $id) {
+            $value = $this->edit_tags[(string) $id] ?? '';
+
+            if ($value !== '' && $value !== null) {
+                $tags[] = [$id, (int) $value];
+            }
+        }
+
+        return ['capabilities' => $capabilities, 'tags' => $tags];
     }
 
     public function addIpAssignment(): void
@@ -323,13 +410,28 @@ new #[Title('Network Members')] class extends Component
 
         $service = $this->getService();
 
-        try {
-            $service->updateNetworkMember($this->networkId, $this->edit_member_id, [
-                'name' => $this->edit_member_name,
-                'ipAssignments' => $this->edit_ip_assignments,
-                'activeBridge' => $this->edit_active_bridge,
-                'noAutoAssignIps' => $this->edit_no_auto_assign,
+        $payload = [
+            'name' => $this->edit_member_name,
+            'ipAssignments' => $this->edit_ip_assignments,
+            'activeBridge' => $this->edit_active_bridge,
+            'noAutoAssignIps' => $this->edit_no_auto_assign,
+        ];
+
+        // Capabilities and tags are part of the network's flow rules, so only
+        // team admins may change them.
+        if (auth()->user()->isTeamAdmin() && $this->hasRulesMeta()) {
+            $this->validate([
+                'edit_capabilities' => 'array',
+                'edit_capabilities.*' => 'integer|min:0|max:4294967295',
+                'edit_tags' => 'array',
+                'edit_tags.*' => 'nullable|integer|min:0|max:4294967295',
             ]);
+
+            $payload += $this->memberRulesPayload();
+        }
+
+        try {
+            $service->updateNetworkMember($this->networkId, $this->edit_member_id, $payload);
 
             // Save description locally (not supported by ZT API)
             $dbNetwork = $this->getDbNetwork();
@@ -433,6 +535,16 @@ new #[Title('Network Members')] class extends Component
                                     </flux:tooltip>
                                 @endif
                                 <div class="font-mono text-xs text-zinc-400">{{ $member['address'] ?? '—' }}</div>
+                                @if (! empty($member['capabilities']) || ! empty($member['tags']))
+                                    <div class="flex flex-wrap gap-1 mt-1">
+                                        @foreach ($this->capabilityLabels($member['capabilities'] ?? []) as $cap)
+                                            <flux:badge size="sm" color="indigo" icon="key">{{ $cap }}</flux:badge>
+                                        @endforeach
+                                        @foreach ($this->tagLabels($member['tags'] ?? []) as $tag)
+                                            <flux:badge size="sm" color="zinc" icon="tag">{{ $tag }}</flux:badge>
+                                        @endforeach
+                                    </div>
+                                @endif
                             </flux:table.cell>
                             <flux:table.cell class="font-mono text-xs">
                                 @foreach (($member['ipAssignments'] ?? []) as $ip)
@@ -554,6 +666,46 @@ new #[Title('Network Members')] class extends Component
                     label="Do Not Auto-Assign IPs"
                     description="Prevent ZeroTier from automatically assigning an IP to this member" />
             </div>
+
+            @if (auth()->user()->isTeamAdmin() && (! empty($rules_meta['capabilities']) || ! empty($rules_meta['tags'])))
+                <div class="space-y-4 mt-5 pt-5 border-t border-zinc-100 dark:border-zinc-700">
+                    <div>
+                        <flux:heading size="sm">Flow Rules</flux:heading>
+                        <flux:description>Capabilities and tags defined in this network's rules script.</flux:description>
+                    </div>
+
+                    @if (! empty($rules_meta['capabilities']))
+                        <flux:checkbox.group wire:model="edit_capabilities" label="Capabilities">
+                            @foreach ($rules_meta['capabilities'] as $capName => $cap)
+                                <flux:checkbox value="{{ $cap['id'] }}" label="{{ $capName }}" description="ID {{ $cap['id'] }}{{ $cap['default'] ? ' · granted by default' : '' }}" />
+                            @endforeach
+                        </flux:checkbox.group>
+                    @endif
+
+                    @foreach (($rules_meta['tags'] ?? []) as $tagName => $tag)
+                        @php
+                            $defaultLabel = $tag['default'] === null ? 'none' : (array_search($tag['default'], $tag['enums'] ?? [], true) ?: $tag['default']);
+                        @endphp
+                        @if (! empty($tag['enums']) && empty($tag['flags']))
+                            <flux:select wire:model="edit_tags.{{ $tag['id'] }}" label="Tag: {{ $tagName }}" wire:key="tag-{{ $tag['id'] }}">
+                                <flux:select.option value="">Not set (default: {{ $defaultLabel }})</flux:select.option>
+                                @foreach ($tag['enums'] as $enumName => $enumValue)
+                                    <flux:select.option value="{{ $enumValue }}">{{ $enumName }} ({{ $enumValue }})</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                        @else
+                            <flux:input
+                                type="number" min="0" max="4294967295"
+                                wire:model="edit_tags.{{ $tag['id'] }}"
+                                wire:key="tag-{{ $tag['id'] }}"
+                                label="Tag: {{ $tagName }}"
+                                placeholder="Not set (default: {{ $defaultLabel }})"
+                                :description="collect(($tag['flags'] ?? []) + ($tag['enums'] ?? []))->map(fn ($v, $n) => $n.'='.$v)->implode(', ') ?: null"
+                            />
+                        @endif
+                    @endforeach
+                </div>
+            @endif
 
             <div class="flex justify-end space-x-2 mt-6">
                 <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>

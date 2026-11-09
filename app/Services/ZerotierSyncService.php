@@ -131,6 +131,8 @@ class ZerotierSyncService
                             'active_bridge' => $memberData['activeBridge'] ?? false,
                             'no_auto_assign_ips' => $memberData['noAutoAssignIps'] ?? false,
                             'ip_assignments' => $memberData['ipAssignments'] ?? [],
+                            'capabilities' => $memberData['capabilities'] ?? [],
+                            'tags' => $memberData['tags'] ?? [],
                             'client_version' => $version,
                             'revision' => $memberData['revision'] ?? $revision,
                             ...$runtime,

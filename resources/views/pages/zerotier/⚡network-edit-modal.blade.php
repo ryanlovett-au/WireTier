@@ -4,8 +4,12 @@ use App\Models\AuditLog;
 use App\Models\Team;
 use App\Models\TeamUser;
 use App\Models\ZerotierNetwork;
+use App\Services\FlowRules\FlowRuleCompileException;
+use App\Services\FlowRules\FlowRuleCompiler;
+use App\Services\FlowRules\FlowRulesService;
 use App\Services\ZerotierService;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -46,6 +50,31 @@ new class extends Component
 
     public array $movable_teams = [];
 
+    // ─── Flow rules (team admins only) ───────────────────────────────
+
+    public string $rules_source = '';
+
+    /** See ZerotierNetwork::rulesState(). Display-only. */
+    #[Locked]
+    public string $rules_state = 'default';
+
+    #[Locked]
+    public ?string $rules_error = null;
+
+    #[Locked]
+    public string $rules_summary = '';
+
+    /** Compiled payload preview (JSON). */
+    #[Locked]
+    public string $rules_preview = '';
+
+    /** The controller's live rules (JSON), shown when they are not WireTier's. */
+    #[Locked]
+    public string $live_rules_json = '';
+
+    #[Locked]
+    public string $rules_updated_label = '';
+
     #[On('open-network-edit')]
     public function open(string $networkId, string $tokenId): void
     {
@@ -82,6 +111,8 @@ new class extends Component
 
             $this->move_to_team_id = '';
             $this->movable_teams = $this->loadMovableTeams($dbNetwork->team_id);
+
+            $this->loadRulesEditor($dbNetwork, $network);
 
             Flux::modal('editNetworkModal')->show();
         } catch (Exception $e) {
@@ -204,6 +235,132 @@ new class extends Component
             report($e);
             Flux::toast(variant: 'danger', heading: 'Error', text: 'Failed to save network. Please try again.');
         }
+    }
+
+    // ─── Flow Rules ──────────────────────────────────────────────────
+
+    protected function loadRulesEditor(ZerotierNetwork $dbNetwork, array $liveConfig): void
+    {
+        $this->rules_source = '';
+        $this->rules_error = null;
+        $this->rules_summary = '';
+        $this->rules_preview = '';
+        $this->live_rules_json = '';
+        $this->rules_updated_label = '';
+        $this->rules_state = 'default';
+
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
+        $this->rules_state = $dbNetwork->rulesState($liveConfig);
+        $this->rules_source = $dbNetwork->rules_source
+            ?? ($this->rules_state === 'default' ? FlowRulesService::DEFAULT_SOURCE : '');
+        $this->rules_updated_label = $dbNetwork->rules_updated_at?->diffForHumans() ?? '';
+
+        if (in_array($this->rules_state, ['drifted', 'unmanaged'], true)) {
+            $this->live_rules_json = json_encode([
+                'rules' => $liveConfig['rules'] ?? [],
+                'capabilities' => $liveConfig['capabilities'] ?? [],
+                'tags' => $liveConfig['tags'] ?? [],
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        }
+
+        $this->compileRules();
+    }
+
+    /** Compile the editor contents for live feedback; never touches the controller. */
+    protected function compileRules(): void
+    {
+        $this->rules_error = null;
+        $this->rules_summary = '';
+        $this->rules_preview = '';
+
+        if (mb_strlen($this->rules_source) > FlowRulesService::MAX_SOURCE_LENGTH) {
+            $this->rules_error = 'The rules script is longer than '.FlowRulesService::MAX_SOURCE_LENGTH.' characters.';
+
+            return;
+        }
+
+        try {
+            $compiled = FlowRuleCompiler::compile($this->rules_source);
+
+            $rules = count($compiled->rules);
+            $caps = count($compiled->capabilities);
+            $tags = count($compiled->tags);
+            $this->rules_summary = "{$rules} ".Str::plural('rule', $rules)
+                .", {$caps} ".Str::plural('capability', $caps)
+                .", {$tags} ".Str::plural('tag', $tags);
+            $this->rules_preview = json_encode($compiled->toNetworkConfig(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        } catch (FlowRuleCompileException $e) {
+            $this->rules_error = $e->describe();
+        }
+    }
+
+    public function updatedRulesSource(): void
+    {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
+        $this->compileRules();
+    }
+
+    public function loadExampleRules(): void
+    {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
+        $this->rules_source = FlowRulesService::EXAMPLE_SOURCE;
+        $this->compileRules();
+    }
+
+    public function saveRules(FlowRulesService $flowRules): void
+    {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
+        $dbNetwork = $this->findAccessibleNetwork($this->editing_network_id, $this->tokenId);
+
+        if (! $dbNetwork) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Network not found.');
+
+            return;
+        }
+
+        try {
+            $compiled = $flowRules->apply($dbNetwork, $this->rules_source);
+        } catch (FlowRuleCompileException $e) {
+            $this->rules_error = $e->describe();
+            Flux::toast(variant: 'danger', heading: 'Rules Not Saved', text: 'Fix the errors in the rules script first.');
+
+            return;
+        } catch (Exception $e) {
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'The controller rejected the rules. Nothing was changed.');
+
+            return;
+        }
+
+        AuditLog::record('network.rules_updated', 'network', $this->editing_network_id, [
+            'name' => $dbNetwork->name,
+            'rules' => count($compiled->rules),
+            'capabilities' => array_keys($compiled->capabilities),
+            'tags' => array_keys($compiled->tags),
+            'hash' => $dbNetwork->rules_hash,
+        ]);
+
+        Cache::forget("team_{$dbNetwork->team_id}_networks_{$this->tokenId}");
+        Cache::forget("network_{$dbNetwork->id}_members");
+
+        $this->rules_state = 'managed';
+        $this->live_rules_json = '';
+        $this->rules_updated_label = $dbNetwork->rules_updated_at?->diffForHumans() ?? '';
+
+        Flux::toast(variant: 'success', heading: 'Rules Applied', text: 'Flow rules are now active on the network.');
+        $this->dispatch('network-updated', networkId: $this->editing_network_id);
     }
 
     // ─── Move Network ────────────────────────────────────────────────
@@ -370,6 +527,7 @@ new class extends Component
             <flux:tab name="ip_ranges">IP Ranges</flux:tab>
             <flux:tab name="routes">Managed Routes</flux:tab>
             @if (auth()->user()->isTeamAdmin())
+                <flux:tab name="rules">Flow Rules</flux:tab>
                 <flux:tab name="move">Move Team</flux:tab>
             @endif
         </flux:tabs>
@@ -466,6 +624,84 @@ new class extends Component
             </div>
         </div>
 
+        {{-- Flow Rules Panel (team admins only) --}}
+        @if (auth()->user()->isTeamAdmin())
+            <div x-show="$wire.edit_tab === 'rules'" class="space-y-3 min-h-[220px]">
+                @if ($rules_state === 'drifted' || $rules_state === 'unmanaged')
+                    <div class="flex items-start gap-2 px-3 py-2.5 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 text-sm">
+                        <flux:icon name="exclamation-triangle" class="size-4 text-amber-500 shrink-0 mt-0.5" />
+                        <div class="text-amber-900 dark:text-amber-200 min-w-0 flex-1">
+                            @if ($rules_state === 'drifted')
+                                The live rules were changed outside WireTier after they were last saved here. The script below is the last version saved in WireTier; saving it will replace the live rules.
+                            @else
+                                This network has flow rules set by another tool, and WireTier doesn't have their source script. Saving a script here will replace them.
+                            @endif
+                            <details class="mt-2">
+                                <summary class="cursor-pointer text-xs font-medium">View live compiled rules</summary>
+                                <pre class="mt-2 max-h-48 overflow-auto rounded bg-white/70 dark:bg-zinc-900/60 p-2 text-xs font-mono text-zinc-700 dark:text-zinc-300">{{ $live_rules_json }}</pre>
+                            </details>
+                        </div>
+                    </div>
+                @endif
+
+                <div class="flex items-center justify-between gap-2">
+                    <div>
+                        <flux:label>Rules script</flux:label>
+                        <flux:description>Written in the ZeroTier rules language. Compiled and checked as you type.</flux:description>
+                    </div>
+                    <flux:button size="xs" variant="ghost" icon="document-text" wire:click="loadExampleRules" wire:confirm="Replace the editor contents with the example script?">Load example</flux:button>
+                </div>
+
+                <textarea
+                    wire:model.live.debounce.600ms="rules_source"
+                    x-on:keydown.tab="if (! $event.shiftKey) { $event.preventDefault(); $el.setRangeText('\t', $el.selectionStart, $el.selectionEnd, 'end'); $el.dispatchEvent(new Event('input')); }"
+                    spellcheck="false"
+                    autocapitalize="off"
+                    autocomplete="off"
+                    rows="16"
+                    aria-label="Flow rules script"
+                    class="block w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-3 py-2 font-mono text-xs leading-5 text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-400 dark:focus:ring-zinc-500 [tab-size:4]"
+                ></textarea>
+
+                <div class="flex items-start justify-between gap-3 text-sm" aria-live="polite">
+                    @if ($rules_error)
+                        <div class="flex items-start gap-1.5 text-red-600 dark:text-red-400 min-w-0">
+                            <flux:icon name="x-circle" class="size-4 shrink-0 mt-0.5" />
+                            <span class="font-mono text-xs break-words">{{ $rules_error }}</span>
+                        </div>
+                    @elseif ($rules_summary)
+                        <div class="flex items-center gap-1.5 text-green-700 dark:text-green-400">
+                            <flux:icon name="check-circle" class="size-4 shrink-0" />
+                            <span>Compiles to {{ $rules_summary }}</span>
+                        </div>
+                    @endif
+                    @if ($rules_updated_label && $rules_state === 'managed')
+                        <span class="text-xs text-zinc-400 shrink-0">Applied {{ $rules_updated_label }}</span>
+                    @endif
+                </div>
+
+                @if ($rules_preview && ! $rules_error)
+                    <details>
+                        <summary class="cursor-pointer text-xs font-medium text-zinc-500">Preview compiled rules</summary>
+                        <pre class="mt-2 max-h-48 overflow-auto rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 p-2 text-xs font-mono text-zinc-700 dark:text-zinc-300">{{ $rules_preview }}</pre>
+                    </details>
+                @endif
+
+                <div class="flex items-center justify-between gap-3 pt-2">
+                    <p class="text-xs text-zinc-500">Rules take effect on every member as soon as they are saved.</p>
+                    <div class="flex gap-2 shrink-0">
+                        <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>
+                        <flux:button
+                            variant="primary"
+                            wire:click="saveRules"
+                            wire:confirm="Apply these flow rules now? Traffic that doesn't match an accept rule will be dropped for every member of this network."
+                            :disabled="(bool) $rules_error"
+                        >Save Rules</flux:button>
+                    </div>
+                </div>
+            </div>
+        @endif
+
         {{-- Move Panel --}}
         @if (auth()->user()->isTeamAdmin())
             <div x-show="$wire.edit_tab === 'move'" class="space-y-5 min-h-[220px]">
@@ -502,7 +738,7 @@ new class extends Component
             </div>
         @endif
 
-        <div x-show="$wire.edit_tab !== 'move'" class="flex justify-end gap-2" style="margin-top: 3rem;">
+        <div x-show="! ['move', 'rules'].includes($wire.edit_tab)" class="flex justify-end gap-2" style="margin-top: 3rem;">
             <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>
             <flux:button variant="primary" wire:click="saveNetwork">Save Changes</flux:button>
         </div>
