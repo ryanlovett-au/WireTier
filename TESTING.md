@@ -44,7 +44,7 @@ The `RefreshDatabase` trait is applied globally to all Feature tests via `tests/
 CFLAGS="-I/opt/homebrew/include" pecl install pcov
 ```
 
-The `phpunit.xml` `<source>` directive covers the `app/` directory. Security tooling files (`Security_Audit`, `Security_Test`, `AuditReport`) are excluded from coverage targets as they run via artisan commands, not HTTP/Livewire requests.
+The `phpunit.xml` `<source>` directive covers the `app/` directory. Security tooling files (`SecurityAudit`, `Security_Test`, `app/Tools/Security`) are excluded from coverage targets as they run via artisan commands, not HTTP/Livewire requests.
 
 ## Test Organisation
 
@@ -59,6 +59,7 @@ tests/
     Services/                — ZerotierService, SyncService, StatsService edge cases
     Settings/                — Profile, security settings pages
     Security/                — Security audit, team isolation, authorization
+      AccessControlTest.php  — Cross-team regression tests (locked ids, team-scoped roles)
       AuditLogTest.php       — Audit log recording, viewer access, filters
       AuthenticationTest.php — Rate limiting, 2FA, session management
       InvitationSecurityTest — Invitation lifecycle, single-use, cleanup
@@ -66,6 +67,7 @@ tests/
       ModelSecurityTest.php  — Mass assignment, serialization, raw SQL
       NetworksPageTest.php   — Network CRUD, team scoping, import flow
       PeersPageTest.php      — Admin gating, data loading
+      SecurityAuditScannerTest — security:audit checks: bug fixtures, false positives, codebase gate
       SessionSecurityTest.php— Config checks, headers, rate limiting
       SyncServiceTest.php    — Sync creation, updates, removal, team isolation
       TeamSettingsTest.php   — Team management, role checks
@@ -120,6 +122,38 @@ test('viewer cannot authorize members', function () {
     expect($member->authorised)->toBeFalse();
 });
 ```
+
+### Static Security Audit
+
+`php artisan security:audit` is a static analyser ported from the scanner our
+sister apps (OMS, Moonscape) share. It parses each Livewire component with the
+PHP tokenizer and tracks request-controlled values (unlocked public properties
+and action parameters) through each method, then reports:
+
+- **Livewire Client Input**: a record lookup keyed by client input with no team
+  or owner scope.
+- **Controller API Input**: client input used as the network ID of a
+  `ZerotierService` call without first resolving the network through a
+  team-scoped lookup. (The controller acts on any network it hosts.)
+- **Current-Team Role Check**: `isTeamAdmin()` / `canManageNetworks()` gating a
+  page that acts on a different team.
+- plus authorization, admin-check integrity, XSS (including `{{ }}` inside
+  Alpine/Livewire JS attributes), SQL injection, rate limiting, headers,
+  session/CSRF config and more.
+
+```bash
+php artisan security:audit                      # table
+php artisan security:audit --fix                # with remediation
+php artisan security:audit --severity=high      # filter
+php artisan security:audit --category="Client"  # one category
+php artisan security:audit --output=json        # for CI
+```
+
+It exits non-zero on any high or critical finding. Findings that are correct by
+design go in `SecurityAudit::SUPPRESSIONS` with a reason; an entry that stops
+matching is reported as stale. `SecurityAuditScannerTest` keeps a fixture for
+each bug class the audit must catch, and fails if the codebase gains a high or
+critical finding.
 
 ### Edge Case Tests
 
@@ -212,7 +246,7 @@ For 100% coverage, ensure you test:
   run: php artisan test --coverage --min=100 --env=testing
 
 - name: Security Audit
-  run: php artisan security:audit --format=json --severity=high
+  run: php artisan security:audit --output=json --severity=high
 
 - name: Code Style
   run: vendor/bin/pint --test

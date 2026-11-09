@@ -9,7 +9,7 @@ class Security_Test extends Command
 {
     protected $signature = 'security:test
         {--seed : Run SecurityTestSeeder before tests}
-        {--format=table : Output format (table, json)}';
+        {--output=table : Output format (table, json)}';
 
     protected $description = 'Run security tests against WireTier (Pest test suite + static audit)';
 
@@ -25,7 +25,7 @@ class Security_Test extends Command
         $this->newLine();
 
         $auditExitCode = Artisan::call('security:audit', [
-            '--format' => $this->option('format'),
+            '--output' => $this->option('output'),
         ], $this->output);
 
         $this->newLine();

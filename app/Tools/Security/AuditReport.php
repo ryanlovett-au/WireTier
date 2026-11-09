@@ -6,6 +6,9 @@ use Illuminate\Console\Command;
 
 class AuditReport
 {
+    /**
+     * Severity levels and their display properties.
+     */
     private static array $severities = [
         'critical' => ['order' => 0, 'label' => 'CRITICAL'],
         'high' => ['order' => 1, 'label' => 'HIGH'],
@@ -14,6 +17,9 @@ class AuditReport
         'info' => ['order' => 4, 'label' => 'INFO'],
     ];
 
+    /**
+     * Create a structured finding.
+     */
     public static function finding(
         string $severity,
         string $category,
@@ -32,32 +38,33 @@ class AuditReport
         ];
     }
 
-    public static function filter(array $findings, string $severity_filter): array
+    public static function filter(array $findings, string $severityFilter): array
     {
-        if ($severity_filter === 'all') {
+        if ($severityFilter === 'all') {
             return $findings;
         }
 
-        return array_values(array_filter($findings, function ($f) use ($severity_filter) {
-            return $f['severity'] === $severity_filter;
-        }));
+        return array_values(array_filter(
+            $findings,
+            fn ($f) => $f['severity'] === $severityFilter,
+        ));
     }
 
     public static function sort(array $findings): array
     {
         usort($findings, function ($a, $b) {
-            $order_a = self::$severities[$a['severity']]['order'] ?? 99;
-            $order_b = self::$severities[$b['severity']]['order'] ?? 99;
+            $orderA = self::$severities[$a['severity']]['order'] ?? 99;
+            $orderB = self::$severities[$b['severity']]['order'] ?? 99;
 
-            return $order_a <=> $order_b;
+            return $orderA <=> $orderB;
         });
 
         return $findings;
     }
 
-    public static function render_table(Command $command, array $findings, string $severity_filter = 'all', bool $show_fix = false): void
+    public static function renderTable(Command $command, array $findings, string $severityFilter = 'all', bool $showFix = false): void
     {
-        $findings = self::filter($findings, $severity_filter);
+        $findings = self::filter($findings, $severityFilter);
         $findings = self::sort($findings);
 
         if (empty($findings)) {
@@ -77,17 +84,18 @@ class AuditReport
             }
 
             $command->newLine();
+            $label = ' '.$props['label'].' ('.count($grouped[$severity]).' findings) ';
 
             if ($severity === 'critical') {
-                $command->error(' '.$props['label'].' ('.count($grouped[$severity]).' findings) ');
+                $command->error($label);
             } elseif ($severity === 'high') {
-                $command->warn(' '.$props['label'].' ('.count($grouped[$severity]).' findings) ');
+                $command->warn($label);
             } else {
-                $command->info(' '.$props['label'].' ('.count($grouped[$severity]).' findings) ');
+                $command->info($label);
             }
 
             $headers = ['Category', 'File', 'Line', 'Description'];
-            if ($show_fix) {
+            if ($showFix) {
                 $headers[] = 'Remediation';
             }
 
@@ -95,11 +103,11 @@ class AuditReport
             foreach ($grouped[$severity] as $finding) {
                 $row = [
                     $finding['category'],
-                    self::shorten_path($finding['file']),
+                    self::shortenPath($finding['file']),
                     $finding['line'] > 0 ? $finding['line'] : '-',
                     $finding['description'],
                 ];
-                if ($show_fix) {
+                if ($showFix) {
                     $row[] = $finding['remediation'];
                 }
                 $rows[] = $row;
@@ -109,9 +117,9 @@ class AuditReport
         }
     }
 
-    public static function render_json(array $findings, string $severity_filter = 'all'): string
+    public static function renderJson(array $findings, string $severityFilter = 'all'): string
     {
-        $findings = self::filter($findings, $severity_filter);
+        $findings = self::filter($findings, $severityFilter);
         $findings = self::sort($findings);
 
         return json_encode([
@@ -120,7 +128,7 @@ class AuditReport
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
     }
 
-    public static function render_summary(Command $command, array $findings): void
+    public static function renderSummary(Command $command, array $findings): void
     {
         $summary = self::summary($findings);
 
@@ -169,7 +177,7 @@ class AuditReport
         return $counts;
     }
 
-    private static function shorten_path(string $path): string
+    private static function shortenPath(string $path): string
     {
         $base = base_path().'/';
 
