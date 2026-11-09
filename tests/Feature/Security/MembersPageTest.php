@@ -3,6 +3,7 @@
 use App\Models\User;
 use App\Models\ZerotierMember;
 use App\Models\ZerotierNetwork;
+use App\Services\ZerotierSyncService;
 use Database\Seeders\SecurityTestSeeder;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
@@ -358,4 +359,44 @@ test('member can edit members', function () {
         ->call('saveMember');
 
     expect($tracker->called)->toBeTrue();
+});
+
+// ─── Payload validation ──────────────────────────────────────────────────
+
+test('saveMember rejects IP assignments that are not IP addresses', function () {
+    $tracker = new stdClass;
+    $tracker->called = false;
+    membersHttpFakes($tracker);
+    $this->actingAs($this->alphaAdmin);
+    ZerotierSyncService::syncNetwork(ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first(), force: true);
+
+    Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])
+        ->call('editMemberModal', 'aabb000001')
+        // A client can set the public array directly, bypassing addIpAssignment().
+        ->set('edit_ip_assignments', ['10.0.0.2', '10.0.0.999', 'evil"; drop'])
+        ->call('saveMember')
+        ->assertHasErrors(['edit_ip_assignments.1', 'edit_ip_assignments.2']);
+
+    expect($tracker->called)->toBeFalse();
+});
+
+test('addIpAssignment only accepts IP addresses', function () {
+    membersHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+
+    Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ])
+        ->set('new_ip', 'not-an-ip')
+        ->call('addIpAssignment')
+        ->assertHasErrors('new_ip')
+        ->assertSet('edit_ip_assignments', [])
+        ->set('new_ip', '10.0.0.9')
+        ->call('addIpAssignment')
+        ->assertHasNoErrors()
+        ->assertSet('edit_ip_assignments', ['10.0.0.9']);
 });

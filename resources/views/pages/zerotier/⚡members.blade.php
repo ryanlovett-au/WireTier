@@ -390,10 +390,13 @@ new #[Title('Network Members')] class extends Component
 
     public function addIpAssignment(): void
     {
-        if (! empty($this->new_ip) && ! in_array($this->new_ip, $this->edit_ip_assignments)) {
+        $this->validate(['new_ip' => 'required|ip'], [], ['new_ip' => 'IP address']);
+
+        if (! in_array($this->new_ip, $this->edit_ip_assignments, true)) {
             $this->edit_ip_assignments[] = $this->new_ip;
-            $this->new_ip = '';
         }
+
+        $this->new_ip = '';
     }
 
     public function removeIpAssignment($index): void
@@ -407,6 +410,21 @@ new #[Title('Network Members')] class extends Component
         if (! auth()->user()->canManageNetworks()) {
             return;
         }
+
+        // These are public properties, so validate them here rather than
+        // trusting addIpAssignment() to have been their only writer.
+        $this->validate([
+            'edit_member_name' => 'nullable|string|max:255',
+            'edit_member_description' => 'nullable|string|max:1000',
+            'edit_ip_assignments' => 'array|max:64',
+            'edit_ip_assignments.*' => 'required|ip|distinct',
+        ], [], [
+            'edit_member_name' => 'name',
+            'edit_member_description' => 'description',
+            'edit_ip_assignments' => 'IP assignments',
+            'edit_ip_assignments.*' => 'IP assignment',
+        ]);
+        $this->edit_ip_assignments = array_values($this->edit_ip_assignments);
 
         $service = $this->getService();
 
@@ -656,6 +674,8 @@ new #[Title('Network Members')] class extends Component
                     <flux:input wire:model="new_ip" placeholder="e.g. 10.147.17.50" class="flex-1" size="sm" wire:keydown.enter="addIpAssignment" />
                     <flux:button size="sm" icon="plus" wire:click="addIpAssignment">Add</flux:button>
                 </div>
+                <flux:error name="new_ip" />
+                <flux:error name="edit_ip_assignments.*" />
             </div>
 
             <div class="space-y-4 mt-5 pt-5 border-t border-zinc-100 dark:border-zinc-700">

@@ -341,29 +341,43 @@ new #[Title('ZeroTier Networks')] class extends Component
 
         $this->validate([
             'new_network_name' => 'required|string|max:255',
-            'new_network_subnet' => 'required|string',
+            // The IP pool below is computed from this, so it must be a real
+            // IPv4 network with room for hosts.
+            'new_network_subnet' => ['required', 'string', function (string $attribute, mixed $value, Closure $fail) {
+                $parts = explode('/', (string) $value);
+                $valid = count($parts) === 2
+                    && filter_var($parts[0], FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false
+                    && ctype_digit($parts[1])
+                    && (int) $parts[1] >= 8 && (int) $parts[1] <= 30;
+
+                if (! $valid) {
+                    $fail('The subnet must be an IPv4 network such as 10.147.17.0/24 (prefix /8 to /30).');
+                }
+            }],
         ]);
 
         $token = ZerotierToken::findOrFail($this->selectedToken);
         $service = new ZerotierService($token);
 
         try {
-            // Parse subnet
-            $parts = explode('/', $this->new_network_subnet);
-            $ip = $parts[0];
-            $bits = $parts[1] ?? '24';
+            // Normalise to the network address (10.0.0.5/24 -> 10.0.0.0/24)
+            // and assign every usable host address in it.
+            [$ip, $bits] = explode('/', $this->new_network_subnet);
+            $size = 2 ** (32 - (int) $bits);
+            $base = ip2long($ip) & ~($size - 1) & 0xFFFFFFFF;
+            $cidr = long2ip($base).'/'.(int) $bits;
 
             $network = $service->createNetwork([
                 'name' => $this->new_network_name,
                 'private' => $this->new_network_private,
                 'ipAssignmentPools' => [
                     [
-                        'ipRangeStart' => long2ip(ip2long($ip) + 1),
-                        'ipRangeEnd' => long2ip(ip2long($ip) + (pow(2, 32 - (int) $bits) - 2)),
+                        'ipRangeStart' => long2ip($base + 1),
+                        'ipRangeEnd' => long2ip($base + $size - 2),
                     ],
                 ],
                 'routes' => [
-                    ['target' => $this->new_network_subnet],
+                    ['target' => $cidr],
                 ],
                 'v4AssignMode' => ['zt' => true],
             ]);

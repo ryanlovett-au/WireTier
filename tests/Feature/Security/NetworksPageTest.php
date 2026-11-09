@@ -505,3 +505,33 @@ test('non-admin cannot call importNetwork', function () {
 
     expect(ZerotierNetwork::count())->toBe($countBefore);
 });
+
+// ─── Subnet validation ───────────────────────────────────────────────────
+
+test('createNetwork rejects a subnet that is not an IPv4 network', function (string $subnet) {
+    defaultHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+
+    Livewire::test('pages::zerotier.networks')
+        ->set('new_network_name', 'Bad Subnet')
+        ->set('new_network_subnet', $subnet)
+        ->call('createNetwork')
+        ->assertHasErrors('new_network_subnet');
+
+    expect(Http::recorded()->contains(fn ($p) => $p[0]->method() === 'POST'))->toBeFalse();
+})->with(['banana', '10.0.0.0', '10.0.0.0/33', '10.0.0.0/31', '999.0.0.0/24', 'fd00::/64']);
+
+test('createNetwork normalises the subnet to its network address', function () {
+    defaultHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+
+    Livewire::test('pages::zerotier.networks')
+        ->set('new_network_name', 'Normalised')
+        ->set('new_network_subnet', '10.42.7.99/24')
+        ->call('createNetwork')
+        ->assertHasNoErrors();
+
+    $create = Http::recorded()->first(fn ($p) => $p[0]->method() === 'POST' && str_contains($p[0]->url(), '/controller/network/'));
+    expect($create[0]->data()['routes'])->toBe([['target' => '10.42.7.0/24']]);
+    expect($create[0]->data()['ipAssignmentPools'])->toBe([['ipRangeStart' => '10.42.7.1', 'ipRangeEnd' => '10.42.7.254']]);
+});
