@@ -144,6 +144,22 @@ php artisan serve
 npm run dev
 ```
 
+### Background Sync (Required)
+
+WireTier reads networks and members from its database, which a scheduled `zerotier:sync` command refreshes from each controller every 30 seconds. Without the scheduler running, member status, "last refreshed" times and flow-rule change detection go stale.
+
+In production, add the standard Laravel scheduler entry to the web server user's crontab:
+
+```cron
+* * * * * cd /path/to/wiretier && php artisan schedule:run >> /dev/null 2>&1
+```
+
+For local development, run it in a terminal alongside `php artisan serve`:
+
+```bash
+php artisan schedule:work
+```
+
 ### Configuration
 
 Key `.env` options:
