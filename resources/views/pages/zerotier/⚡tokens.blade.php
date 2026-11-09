@@ -205,7 +205,7 @@ new #[Title('ZeroTier Controllers')] class extends Component
                     <flux:table.row :key="$token->id">
                         <flux:table.cell class="font-medium">{{ $token->name }}</flux:table.cell>
                         <flux:table.cell class="text-xs font-mono">{{ $token->host }}</flux:table.cell>
-                        <flux:table.cell class="text-xs font-mono">{{ $token->node_address ?? '—' }}</flux:table.cell>
+                        <flux:table.cell class="text-xs font-mono">{{ $token->node_address ?? '-' }}</flux:table.cell>
                         <flux:table.cell>
                             @if ($token->is_active)
                                 <flux:badge color="green" size="sm">Active</flux:badge>

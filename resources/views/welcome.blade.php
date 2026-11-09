@@ -94,7 +94,7 @@
                 <p class="text-zinc-400 mx-auto" style="font-size:1.125rem;line-height:1.7;max-width:560px;margin-bottom:40px;">
                     A self-hosted ZeroTier controller UI built with Laravel and Livewire.<br><br>
                     Run it on your own infrastructure. WireTier gives your self-hosted ZeroTier controller
-                    a powerful web UI — manage networks, authorise members, and share access with your team.
+                    a powerful web UI - manage networks, authorise members, and share access with your team.
                 </p>
 
                 <div class="flex flex-wrap items-center justify-center gap-3">
@@ -133,16 +133,16 @@
                 <div class="text-center" style="margin-bottom:56px;">
                     <h2 class="font-semibold text-zinc-100" style="font-size:1.5rem;margin-bottom:12px;">How it works</h2>
                     <p class="text-zinc-400 mx-auto" style="max-width:560px;line-height:1.7;">
-                        A ZeroTier controller is just a regular ZeroTier node. Every node exposes a local API —
+                        A ZeroTier controller is just a regular ZeroTier node. Every node exposes a local API -
                         WireTier connects to that API and gives it controller superpowers through a shared web UI.
                     </p>
                 </div>
 
                 <div class="lp-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;">
                     @foreach ([
-                        ['1', 'Install ZeroTier', 'Install the ZeroTier client on any machine. It becomes a node — and every node is already a controller waiting to be unlocked.'],
+                        ['1', 'Install ZeroTier', 'Install the ZeroTier client on any machine. It becomes a node - and every node is already a controller waiting to be unlocked.'],
                         ['2', 'Add your token', 'Paste your ZeroTier API token into WireTier. It will automatically detect your node address and verify the connection.'],
-                        ['3', 'Manage your networks', 'Browse networks, authorise members, and share access with your team — with roles and permissions built in from the start.'],
+                        ['3', 'Manage your networks', 'Browse networks, authorise members, and share access with your team - with roles and permissions built in from the start.'],
                     ] as [$num, $title, $body])
                     <div class="rounded-2xl border border-zinc-800 bg-zinc-900" style="padding:24px;">
                         <div class="flex items-center justify-center rounded-xl bg-zinc-800 font-semibold text-orange-500" style="width:36px;height:36px;font-size:14px;margin-bottom:16px;">{{ $num }}</div>
@@ -170,7 +170,7 @@
                     @foreach ([
                         [
                             'Team-based access',
-                            'Organise users into teams. Each team has its own controllers, networks, and members — fully isolated from other teams.',
+                            'Organise users into teams. Each team has its own controllers, networks, and members - fully isolated from other teams.',
                             '<path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />'
                         ],
                         [

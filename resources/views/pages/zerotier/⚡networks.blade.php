@@ -55,7 +55,7 @@ new #[Title('ZeroTier Networks')] class extends Component
         while (count($suggestions) < 6) {
             // Alternate between 10.x.x.0/24 and 172.x.x.0/24
             if (count($suggestions) % 2 === 0) {
-                // 10.x.x.0/24 — avoid .0.x and .1.x (too common)
+                // 10.x.x.0/24 - avoid .0.x and .1.x (too common)
                 $second = rand(2, 254);
                 $third = rand(0, 254);
                 $subnet = "10.{$second}.{$third}.0/24";
@@ -504,7 +504,7 @@ new #[Title('ZeroTier Networks')] class extends Component
             }, 1000)"
             class="text-xs text-zinc-400 text-right -mt-4 mb-4"
         >
-            Last refreshed &middot; <span x-text="label"></span>
+            Last refreshed - <span x-text="label"></span>
         </div>
         @endif
 
@@ -528,7 +528,7 @@ new #[Title('ZeroTier Networks')] class extends Component
                         @foreach ($untracked_networks as $uNetwork)
                         <flux:table.row wire:key="untracked-{{ $uNetwork['nwid'] }}">
                             <flux:table.cell class="font-mono text-xs">{{ $uNetwork['nwid'] }}</flux:table.cell>
-                            <flux:table.cell>{{ $uNetwork['name'] ?: '—' }}</flux:table.cell>
+                            <flux:table.cell>{{ $uNetwork['name'] ?: '-' }}</flux:table.cell>
                             <flux:table.cell>
                                 @if ($uNetwork['private'])
                                     <flux:badge color="green" size="sm">Private</flux:badge>
@@ -591,7 +591,7 @@ new #[Title('ZeroTier Networks')] class extends Component
                             </div>
                             <div class="flex items-center gap-4 mt-2 text-sm text-zinc-500">
                                 <x-copy-pill :value="$network['nwid'] ?? $network['id'] ?? ''" class="font-mono" icon="size-3.5">
-                                    {{ $network['nwid'] ?? $network['id'] ?? '—' }}
+                                    {{ $network['nwid'] ?? $network['id'] ?? '-' }}
                                 </x-copy-pill>
                                 <flux:badge color="zinc" size="sm">{{ $network['_member_count'] ?? 0 }} members</flux:badge>
                                 @if (($network['_pending_count'] ?? 0) > 0)

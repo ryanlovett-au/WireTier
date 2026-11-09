@@ -31,7 +31,7 @@
                 <span class="truncate">
                     {{ $status['name'] }}
                     @if ($status['address'])
-                        <span class="font-mono opacity-60">&middot; {{ $status['address'] }}</span>
+                        <span class="font-mono opacity-60">| {{ $status['address'] }}</span>
                     @endif
                 </span>
             </div>

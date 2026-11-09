@@ -116,7 +116,7 @@ new #[Title('Dashboard')] class extends Component
                     }, 1000)"
                     class="text-xs text-zinc-400 mt-2"
                 >
-                    Last updated &middot; <span x-text="label"></span>
+                    Last updated - <span x-text="label"></span>
                 </div>
             </flux:card>
         </div>
@@ -148,7 +148,7 @@ new #[Title('Dashboard')] class extends Component
                 }, 1000)"
                 class="text-xs text-zinc-400 mt-2"
             >
-                Last checked &middot; <span x-text="label"></span>
+                Last checked - <span x-text="label"></span>
             </div>
         </flux:card>
         @endif

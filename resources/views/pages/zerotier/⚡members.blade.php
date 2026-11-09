@@ -246,7 +246,7 @@ new #[Title('Network Members')] class extends Component
     #[On('network-moved')]
     public function reloadAfterNetworkMoved(): void
     {
-        // The network is no longer on the user's current team — bounce back to the list.
+        // The network is no longer on the user's current team - bounce back to the list.
         $this->redirect(route('zerotier.networks'), navigate: true);
     }
 
@@ -494,7 +494,7 @@ new #[Title('Network Members')] class extends Component
             }, 1000)"
             class="text-xs text-zinc-400 text-right -mt-4 mb-4"
         >
-            Last refreshed &middot; <span x-text="label"></span>
+            Last refreshed - <span x-text="label"></span>
         </div>
         @endif
 
@@ -534,7 +534,7 @@ new #[Title('Network Members')] class extends Component
                                         <div class="text-xs text-zinc-400 truncate">{{ $member['description'] }}</div>
                                     </flux:tooltip>
                                 @endif
-                                <div class="font-mono text-xs text-zinc-400">{{ $member['address'] ?? '—' }}</div>
+                                <div class="font-mono text-xs text-zinc-400">{{ $member['address'] ?? '-' }}</div>
                                 @if (! empty($member['capabilities']) || ! empty($member['tags']))
                                     <div class="flex flex-wrap gap-1 mt-1">
                                         @foreach ($this->capabilityLabels($member['capabilities'] ?? []) as $cap)
@@ -677,7 +677,7 @@ new #[Title('Network Members')] class extends Component
                     @if (! empty($rules_meta['capabilities']))
                         <flux:checkbox.group wire:model="edit_capabilities" label="Capabilities">
                             @foreach ($rules_meta['capabilities'] as $capName => $cap)
-                                <flux:checkbox value="{{ $cap['id'] }}" label="{{ $capName }}" description="ID {{ $cap['id'] }}{{ $cap['default'] ? ' · granted by default' : '' }}" />
+                                <flux:checkbox value="{{ $cap['id'] }}" label="{{ $capName }}" description="ID {{ $cap['id'] }}{{ $cap['default'] ? ' | granted by default' : '' }}" />
                             @endforeach
                         </flux:checkbox.group>
                     @endif

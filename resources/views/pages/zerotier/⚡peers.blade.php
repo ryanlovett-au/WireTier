@@ -113,7 +113,7 @@ new #[Title('Node Status & Peers')] class extends Component
             }, 1000)"
             class="text-xs text-zinc-400 text-right -mt-4 mb-4"
         >
-            Last refreshed &middot; <span x-text="label"></span>
+            Last refreshed - <span x-text="label"></span>
         </div>
         @endif
 
@@ -134,11 +134,11 @@ new #[Title('Node Status & Peers')] class extends Component
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                         <flux:label>Address</flux:label>
-                        <div class="font-mono text-sm mt-1">{{ $status['address'] ?? '—' }}</div>
+                        <div class="font-mono text-sm mt-1">{{ $status['address'] ?? '-' }}</div>
                     </div>
                     <div>
                         <flux:label>Version</flux:label>
-                        <div class="text-sm mt-1">{{ $status['version'] ?? '—' }}</div>
+                        <div class="text-sm mt-1">{{ $status['version'] ?? '-' }}</div>
                     </div>
                     <div>
                         <flux:label>Online</flux:label>
@@ -176,13 +176,13 @@ new #[Title('Node Status & Peers')] class extends Component
                         <flux:table.rows>
                         @foreach ($peers as $peer)
                             <flux:table.row :key="$peer['address'] ?? $loop->index">
-                                <flux:table.cell class="font-mono text-xs">{{ $peer['address'] ?? '—' }}</flux:table.cell>
+                                <flux:table.cell class="font-mono text-xs">{{ $peer['address'] ?? '-' }}</flux:table.cell>
                                 <flux:table.cell>
                                     <flux:badge :color="($peer['role'] ?? '') === 'LEAF' ? 'blue' : 'amber'" size="sm">
-                                        {{ $peer['role'] ?? '—' }}
+                                        {{ $peer['role'] ?? '-' }}
                                     </flux:badge>
                                 </flux:table.cell>
-                                <flux:table.cell>{{ ($peer['latency'] ?? -1) >= 0 ? ($peer['latency'].'ms') : '—' }}</flux:table.cell>
+                                <flux:table.cell>{{ ($peer['latency'] ?? -1) >= 0 ? ($peer['latency'].'ms') : '-' }}</flux:table.cell>
                                 <flux:table.cell class="text-xs">{{ ($peer['versionMajor'] ?? '').'.'.($peer['versionMinor'] ?? '').'.'.($peer['versionRev'] ?? '') }}</flux:table.cell>
                                 <flux:table.cell class="text-xs font-mono">
                                     @foreach (($peer['paths'] ?? []) as $path)

@@ -245,3 +245,49 @@ test('a team member who is not an admin cannot change capabilities or tags', fun
     expect($this->memberConfig['name'])->toBe('renamed');
     expect($this->memberConfig['capabilities'])->toBe([]);
 });
+
+// ─── Confirmation ────────────────────────────────────────────────────────
+
+test('save rules asks for confirmation in a Flux modal before applying', function () {
+    openRulesEditor($this->alphaAdmin)
+        ->set('rules_source', SSH_RULES)
+        ->call('confirmSaveRules')
+        ->assertDispatched('modal-show', name: 'saveRulesConfirm');
+
+    // Opening the confirmation applies nothing.
+    expect($this->controller['rules'])->toBe([['type' => 'ACTION_ACCEPT']]);
+    expect($this->network->fresh()->rules_source)->toBeNull();
+});
+
+test('save rules confirmation is not offered for a script with errors', function () {
+    openRulesEditor($this->alphaAdmin)
+        ->set('rules_source', 'drop ethertype banana;')
+        ->call('confirmSaveRules')
+        ->assertNotDispatched('modal-show', name: 'saveRulesConfirm');
+});
+
+test('load example confirms before replacing an edited script, but not an untouched one', function () {
+    openRulesEditor($this->alphaAdmin)
+        ->call('confirmLoadExample')
+        ->assertNotDispatched('modal-show', name: 'loadExampleConfirm')
+        ->assertSet('rules_source', FlowRulesService::EXAMPLE_SOURCE);
+
+    openRulesEditor($this->alphaAdmin)
+        ->set('rules_source', 'accept;')
+        ->call('confirmLoadExample')
+        ->assertDispatched('modal-show', name: 'loadExampleConfirm')
+        ->assertSet('rules_source', 'accept;');
+});
+
+test('views never use native browser dialogs', function () {
+    // Confirmations must use Flux confirm modals, not alert/confirm/prompt
+    // (Livewire's wire:confirm calls the browser's confirm()).
+    $offenders = collect(File::allFiles(resource_path()))
+        ->filter(fn ($f) => str_ends_with($f->getFilename(), '.php') || str_ends_with($f->getFilename(), '.js'))
+        ->filter(fn ($f) => preg_match('/wire:confirm|window\.(alert|confirm|prompt)\s*\(|(?<![\w.:>-])(alert|confirm|prompt)\s*\(/', $f->getContents()))
+        ->map(fn ($f) => $f->getRelativePathname())
+        ->values()
+        ->all();
+
+    expect($offenders)->toBe([]);
+});

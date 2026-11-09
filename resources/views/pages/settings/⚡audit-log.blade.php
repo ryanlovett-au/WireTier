@@ -201,7 +201,7 @@ new #[Title('Audit Log')] class extends Component
                                         {{ is_bool($value) ? ($value ? 'yes' : 'no') : Str::limit((string) $value, 30) }}{{ !$loop->last ? ', ' : '' }}
                                     @endforeach
                                 @else
-                                    —
+                                    -
                                 @endif
                             </flux:table.cell>
                         </flux:table.row>

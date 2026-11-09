@@ -306,6 +306,22 @@ new class extends Component
         $this->compileRules();
     }
 
+    public function confirmLoadExample(): void
+    {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
+        // Nothing to lose when the editor is empty or untouched: load straight away.
+        if (trim($this->rules_source) === '' || $this->rules_source === FlowRulesService::DEFAULT_SOURCE) {
+            $this->loadExampleRules();
+
+            return;
+        }
+
+        Flux::modal('loadExampleConfirm')->show();
+    }
+
     public function loadExampleRules(): void
     {
         if (! auth()->user()->isTeamAdmin()) {
@@ -314,6 +330,25 @@ new class extends Component
 
         $this->rules_source = FlowRulesService::EXAMPLE_SOURCE;
         $this->compileRules();
+
+        Flux::modal('loadExampleConfirm')->close();
+    }
+
+    public function confirmSaveRules(): void
+    {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
+        $this->compileRules();
+
+        if ($this->rules_error) {
+            Flux::toast(variant: 'danger', heading: 'Rules Not Saved', text: 'Fix the errors in the rules script first.');
+
+            return;
+        }
+
+        Flux::modal('saveRulesConfirm')->show();
     }
 
     public function saveRules(FlowRulesService $flowRules): void
@@ -329,6 +364,8 @@ new class extends Component
 
             return;
         }
+
+        Flux::modal('saveRulesConfirm')->close();
 
         try {
             $compiled = $flowRules->apply($dbNetwork, $this->rules_source);
@@ -649,7 +686,7 @@ new class extends Component
                         <flux:label>Rules script</flux:label>
                         <flux:description>Written in the ZeroTier rules language. Compiled and checked as you type.</flux:description>
                     </div>
-                    <flux:button size="xs" variant="ghost" icon="document-text" wire:click="loadExampleRules" wire:confirm="Replace the editor contents with the example script?">Load example</flux:button>
+                    <flux:button size="xs" variant="ghost" icon="document-text" wire:click="confirmLoadExample">Load example</flux:button>
                 </div>
 
                 <textarea
@@ -693,8 +730,7 @@ new class extends Component
                         <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>
                         <flux:button
                             variant="primary"
-                            wire:click="saveRules"
-                            wire:confirm="Apply these flow rules now? Traffic that doesn't match an accept rule will be dropped for every member of this network."
+                            wire:click="confirmSaveRules"
                             :disabled="(bool) $rules_error"
                         >Save Rules</flux:button>
                     </div>
@@ -708,7 +744,7 @@ new class extends Component
                 <div>
                     <flux:label>Current Team</flux:label>
                     <div class="mt-1 px-3 py-2 rounded-md border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-sm">
-                        {{ auth()->user()->team?->name ?? '—' }}
+                        {{ auth()->user()->team?->name ?? '-' }}
                     </div>
                 </div>
 
@@ -764,6 +800,45 @@ new class extends Component
                 <flux:button variant="filled">Cancel</flux:button>
             </flux:modal.close>
             <flux:button variant="primary" wire:click="moveNetwork">Move</flux:button>
+        </div>
+    </flux:modal>
+
+    {{-- Apply Flow Rules Confirm Modal --}}
+    <flux:modal name="saveRulesConfirm" focusable class="max-w-sm">
+        <div class="w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-900/40 p-4 mt-4 mb-4 mx-auto flex items-center justify-center">
+            <flux:icon name="shield-check" class="size-6 text-amber-600 dark:text-amber-400" />
+        </div>
+
+        <flux:heading size="lg" class="text-center">Apply Flow Rules?</flux:heading>
+        <flux:subheading class="text-center mt-2 mb-6">
+            The rules take effect immediately for every member of this network.
+            Traffic that doesn't match an accept rule will be dropped.
+        </flux:subheading>
+
+        <div class="flex justify-end gap-2">
+            <flux:modal.close>
+                <flux:button variant="filled">Cancel</flux:button>
+            </flux:modal.close>
+            <flux:button variant="primary" wire:click="saveRules">Apply Rules</flux:button>
+        </div>
+    </flux:modal>
+
+    {{-- Load Example Rules Confirm Modal --}}
+    <flux:modal name="loadExampleConfirm" focusable class="max-w-sm">
+        <div class="w-14 h-14 rounded-full bg-zinc-100 dark:bg-zinc-800 p-4 mt-4 mb-4 mx-auto flex items-center justify-center">
+            <flux:icon name="document-text" class="size-6 text-zinc-600 dark:text-zinc-300" />
+        </div>
+
+        <flux:heading size="lg" class="text-center">Load Example Script?</flux:heading>
+        <flux:subheading class="text-center mt-2 mb-6">
+            This replaces the script in the editor with the example. Nothing is applied until you save.
+        </flux:subheading>
+
+        <div class="flex justify-end gap-2">
+            <flux:modal.close>
+                <flux:button variant="filled">Cancel</flux:button>
+            </flux:modal.close>
+            <flux:button variant="primary" wire:click="loadExampleRules">Replace Script</flux:button>
         </div>
     </flux:modal>
 </div>
