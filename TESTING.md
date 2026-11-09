@@ -137,6 +137,10 @@ and action parameters) through each method, then reports:
   team-scoped lookup. (The controller acts on any network it hosts.)
 - **Current-Team Role Check**: `isTeamAdmin()` / `canManageNetworks()` gating a
   page that acts on a different team.
+- **Controller Payload Validation**: a client-writable property reaching the
+  config payload of a controller write without a `validate()` rule for it.
+- **Dependency Advisories**: known vulnerabilities from `composer audit` and
+  `npm audit` (needs network access; skip with `--offline`).
 - plus authorization, admin-check integrity, XSS (including `{{ }}` inside
   Alpine/Livewire JS attributes), SQL injection, rate limiting, headers,
   session/CSRF config and more.
@@ -147,6 +151,7 @@ php artisan security:audit --fix                # with remediation
 php artisan security:audit --severity=high      # filter
 php artisan security:audit --category="Client"  # one category
 php artisan security:audit --output=json        # for CI
+php artisan security:audit --offline            # skip the dependency advisory lookup
 ```
 
 It exits non-zero on any high or critical finding. Findings that are correct by

@@ -7,10 +7,13 @@ use App\Tools\Security\Analysis\PhpSource;
 use App\Tools\Security\AuditReport;
 use App\Tools\Security\Checks\ClientInputLookupCheck;
 use App\Tools\Security\Checks\ControllerApiInputCheck;
+use App\Tools\Security\Checks\ControllerPayloadCheck;
 use App\Tools\Security\Checks\CurrentTeamRoleCheck;
 use App\Tools\Security\Checks\JsAttributeEchoCheck;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
+use Symfony\Component\Process\ExecutableFinder;
+use Symfony\Component\Process\Process;
 
 /**
  * Static security audit of the WireTier codebase.
@@ -28,7 +31,8 @@ class SecurityAudit extends Command
         {--output=table : Output format (table, json)}
         {--severity=all : Filter by severity (critical, high, medium, low, info, all)}
         {--fix : Show remediation suggestions}
-        {--category= : Filter by category substring (e.g. "Livewire Client Input")}';
+        {--category= : Filter by category substring (e.g. "Livewire Client Input")}
+        {--offline : Skip the dependency advisory check (it queries the composer and npm advisory databases)}';
 
     protected $description = 'Run a static security audit of the WireTier codebase';
 
@@ -73,8 +77,15 @@ class SecurityAudit extends Command
         ],
     ];
 
+    /**
+     * Whether scanners() includes the dependency advisory check. Off unless
+     * handle() turns it on, so tests calling scanners() stay offline.
+     */
+    public bool $includeDependencies = false;
+
     public function handle(): int
     {
+        $this->includeDependencies = ! $this->option('offline');
         $json = $this->option('output') === 'json';
         $progress = fn (string $line) => $json ? null : $this->line($line);
 
@@ -143,7 +154,11 @@ class SecurityAudit extends Command
     {
         $livewire = fn () => $this->livewireComponentFiles();
 
-        return [
+        $dependencies = $this->includeDependencies
+            ? ['Dependency Advisories' => fn () => $this->scanDependencies()]
+            : [];
+
+        return $dependencies + [
             // Access control
             'Livewire Client Input' => fn () => $this->runSourceCheck(new ClientInputLookupCheck(self::SHARED_MODELS), $livewire()),
             'Controller API Input' => fn () => $this->runSourceCheck(new ControllerApiInputCheck, $livewire()),
@@ -157,6 +172,7 @@ class SecurityAudit extends Command
             // Injection and output
             'SQL Injection' => fn () => $this->scanSqlInjection(),
             'Controller URL Paths' => fn () => $this->scanControllerUrlPaths(),
+            'Controller Payload Validation' => fn () => $this->runSourceCheck(new ControllerPayloadCheck, $livewire()),
             'Blade XSS' => fn () => $this->scanBladeXss(),
             'Alpine/Livewire JS Injection' => function () {
                 $check = new JsAttributeEchoCheck;
@@ -521,6 +537,147 @@ class SecurityAudit extends Command
         }
 
         return [];
+    }
+
+    /**
+     * Known vulnerabilities in installed packages: composer audit (PHP) and
+     * npm audit (JS, production dependencies). Both query advisory databases,
+     * so this needs network access; a tool that can't run is reported as info
+     * rather than failing the audit.
+     */
+    private function scanDependencies(): array
+    {
+        $findings = [];
+
+        if (File::exists(base_path('composer.lock'))) {
+            $result = $this->runJsonTool(['composer', 'audit', '--format=json', '--locked', '--no-interaction']);
+            $findings = is_array($result)
+                ? array_merge($findings, self::parseComposerAudit($result, base_path('composer.lock')))
+                : array_merge($findings, [$this->toolUnavailable('composer audit', $result, 'composer.lock')]);
+        }
+
+        if (File::exists(base_path('package-lock.json'))) {
+            $result = $this->runJsonTool(['npm', 'audit', '--omit=dev', '--json']);
+            $findings = is_array($result)
+                ? array_merge($findings, self::parseNpmAudit($result, base_path('package-lock.json')))
+                : array_merge($findings, [$this->toolUnavailable('npm audit', $result, 'package-lock.json')]);
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Run a tool that prints JSON. Audit tools exit non-zero when they find
+     * something, so the exit code is ignored and stdout is parsed instead.
+     *
+     * @param  list<string>  $command
+     * @return array<string, mixed>|string decoded JSON, or why it couldn't run
+     */
+    private function runJsonTool(array $command): array|string
+    {
+        $binary = (new ExecutableFinder)->find($command[0]);
+        if ($binary === null) {
+            return $command[0].' is not installed or not on PATH';
+        }
+
+        $process = new Process([$binary, ...array_slice($command, 1)], base_path(), null, null, 120);
+        try {
+            $process->run();
+        } catch (\Throwable $e) {
+            return $e->getMessage();
+        }
+
+        $decoded = json_decode($process->getOutput(), true);
+
+        return is_array($decoded) ? $decoded : (trim($process->getErrorOutput()) ?: 'no JSON output');
+    }
+
+    private function toolUnavailable(string $tool, string $reason, string $file): array
+    {
+        return AuditReport::finding(
+            'info',
+            'Dependency Advisories',
+            base_path($file),
+            0,
+            "Could not run {$tool} ({$reason}) - dependency advisories were not checked",
+            'Run the audit with network access, or check '.$file.' manually',
+        );
+    }
+
+    /**
+     * Findings from `composer audit --format=json`.
+     *
+     * @param  array<string, mixed>  $report
+     * @return list<array<string, mixed>>
+     */
+    public static function parseComposerAudit(array $report, string $file): array
+    {
+        $findings = [];
+
+        foreach ($report['advisories'] ?? [] as $package => $advisories) {
+            foreach ($advisories as $advisory) {
+                $severity = strtolower((string) ($advisory['severity'] ?? ''));
+                $id = $advisory['cve'] ?? $advisory['advisoryId'] ?? null;
+                $findings[] = AuditReport::finding(
+                    in_array($severity, ['critical', 'high', 'medium', 'low'], true) ? $severity : 'medium',
+                    'Dependency Advisories',
+                    $file,
+                    0,
+                    "{$package}: ".trim((string) ($advisory['title'] ?? 'security advisory')).($id ? " ({$id})" : ''),
+                    'Update '.$package.' (composer update '.$package.' --with-all-dependencies)'.(isset($advisory['link']) ? ' - '.$advisory['link'] : ''),
+                );
+            }
+        }
+
+        foreach ($report['abandoned'] ?? [] as $package => $replacement) {
+            $findings[] = AuditReport::finding(
+                'low',
+                'Dependency Advisories',
+                $file,
+                0,
+                "{$package} is abandoned and will not receive security fixes",
+                is_string($replacement) && $replacement !== '' ? "Replace it with {$replacement}" : 'Replace it with a maintained package',
+            );
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Findings from `npm audit --json` (report version 2): one per
+     * vulnerable package, with npm's "moderate" mapped to medium.
+     *
+     * @param  array<string, mixed>  $report
+     * @return list<array<string, mixed>>
+     */
+    public static function parseNpmAudit(array $report, string $file): array
+    {
+        $findings = [];
+
+        foreach ($report['vulnerabilities'] ?? [] as $package => $vuln) {
+            $severity = match ($vuln['severity'] ?? '') {
+                'critical' => 'critical',
+                'high' => 'high',
+                'moderate' => 'medium',
+                'low' => 'low',
+                default => 'info',
+            };
+            $titles = collect($vuln['via'] ?? [])
+                ->map(fn ($via) => is_array($via) ? ($via['title'] ?? null) : null)
+                ->filter()->unique()->take(2)->implode('; ');
+            $via = collect($vuln['via'] ?? [])->filter(fn ($v) => is_string($v))->implode(', ');
+
+            $findings[] = AuditReport::finding(
+                $severity,
+                'Dependency Advisories',
+                $file,
+                0,
+                "npm {$package}: ".($titles !== '' ? $titles : 'vulnerable through '.($via !== '' ? $via : 'a dependency')).(! empty($vuln['isDirect']) ? '' : ' (transitive)'),
+                ($vuln['fixAvailable'] ?? false) ? 'Run npm audit fix' : 'No fix available yet - check whether the vulnerable path is reachable',
+            );
+        }
+
+        return $findings;
     }
 
     // ─── Shared scanners (from the OMS / Moonscape audit) ────────────────────

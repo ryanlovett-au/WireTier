@@ -10,6 +10,7 @@ use App\Console\Commands\SecurityAudit;
 use App\Tools\Security\Analysis\PhpSource;
 use App\Tools\Security\Checks\ClientInputLookupCheck;
 use App\Tools\Security\Checks\ControllerApiInputCheck;
+use App\Tools\Security\Checks\ControllerPayloadCheck;
 use App\Tools\Security\Checks\CurrentTeamRoleCheck;
 use App\Tools\Security\Checks\JsAttributeEchoCheck;
 use Illuminate\Support\Facades\Artisan;
@@ -310,10 +311,114 @@ test('flags a quoted echo inside wire:click and accepts Js::from in either spell
     expect($check->check($file, '<button x-on:click="copy({{ \Illuminate\Support\Js::from($value) }})">'))->toBe([]);
 });
 
+// ─── Controller Payload Validation ───────────────────────────────────────
+
+test('flags client-writable data sent to the controller without validation', function () {
+    $findings = (new ControllerPayloadCheck)->check(component(<<<'PHP'
+        public string $edit_member_name = '';
+        public array $edit_ip_assignments = [];
+        public bool $edit_active_bridge = false;
+
+        public function saveMember(): void
+        {
+            $payload = [
+                'name' => $this->edit_member_name,
+                'ipAssignments' => $this->edit_ip_assignments,
+                'activeBridge' => $this->edit_active_bridge,
+            ];
+            $this->service->updateNetworkMember($this->networkId, $this->memberId, $payload);
+        }
+    PHP));
+
+    // The bool is exempt (Livewire coerces it); the string and array are not.
+    expect(descriptions($findings))->toHaveCount(2);
+    expect($findings[0]['description'])->toContain('$this->edit_member_name');
+    expect($findings[1]['description'])->toContain('$this->edit_ip_assignments');
+});
+
+test('accepts payload properties validated in the method or a helper', function () {
+    $findings = (new ControllerPayloadCheck)->check(component(<<<'PHP'
+        public string $edit_name = '';
+        public array $edit_routes = [];
+
+        public function saveNetwork(): void
+        {
+            $this->validate(['edit_name' => 'required|string|max:255']);
+            $this->validateRoutes();
+            $routes = array_map(fn ($r) => ['target' => $r['target']], $this->edit_routes);
+            $this->service->updateNetwork($this->networkId, ['name' => $this->edit_name, 'routes' => $routes]);
+        }
+
+        protected function validateRoutes(): void
+        {
+            $this->validate(['edit_routes.*.target' => 'required|string']);
+        }
+    PHP));
+
+    expect($findings)->toBe([]);
+});
+
+test('ignores properties that never reach the controller payload', function () {
+    $findings = (new ControllerPayloadCheck)->check(component(<<<'PHP'
+        public string $edit_member_description = '';
+
+        public function saveMember(): void
+        {
+            $this->service->updateNetworkMember($this->networkId, $this->memberId, ['authorized' => true]);
+            ZerotierMember::where('id', 1)->update(['description' => $this->edit_member_description]);
+        }
+    PHP));
+
+    expect($findings)->toBe([]);
+});
+
+// ─── Dependency Advisories ───────────────────────────────────────────────
+
+test('turns composer audit output into findings', function () {
+    $findings = SecurityAudit::parseComposerAudit([
+        'advisories' => [
+            'guzzlehttp/guzzle' => [
+                ['title' => 'Host check bypass', 'severity' => 'high', 'cve' => 'CVE-2026-1', 'link' => 'https://example.test/a'],
+                ['title' => 'Unknown severity', 'severity' => null, 'advisoryId' => 'PKSA-x'],
+            ],
+        ],
+        'abandoned' => ['old/package' => 'new/package'],
+    ], 'composer.lock');
+
+    expect(array_column($findings, 'severity'))->toBe(['high', 'medium', 'low']);
+    expect($findings[0]['description'])->toBe('guzzlehttp/guzzle: Host check bypass (CVE-2026-1)');
+    expect($findings[1]['description'])->toContain('(PKSA-x)');
+    expect($findings[2]['description'])->toContain('old/package is abandoned');
+});
+
+test('turns npm audit output into findings', function () {
+    $findings = SecurityAudit::parseNpmAudit([
+        'auditReportVersion' => 2,
+        'vulnerabilities' => [
+            'vite' => ['severity' => 'high', 'isDirect' => true, 'via' => [['title' => 'fs.deny bypass']], 'fixAvailable' => true],
+            'nanoid' => ['severity' => 'moderate', 'isDirect' => false, 'via' => ['postcss'], 'fixAvailable' => false],
+        ],
+    ], 'package-lock.json');
+
+    expect(array_column($findings, 'severity'))->toBe(['high', 'medium']);
+    expect($findings[0]['description'])->toBe('npm vite: fs.deny bypass');
+    expect($findings[1]['description'])->toBe('npm nanoid: vulnerable through postcss (transitive)');
+    expect($findings[1]['remediation'])->toContain('No fix available');
+});
+
+test('scanners() stays offline unless the command enables the dependency check', function () {
+    expect((new SecurityAudit)->scanners())->not->toHaveKey('Dependency Advisories');
+
+    $audit = new SecurityAudit;
+    $audit->includeDependencies = true;
+    expect($audit->scanners())->toHaveKey('Dependency Advisories');
+});
+
 // ─── Whole-codebase gates ────────────────────────────────────────────────
 
 test('the codebase has no high or critical audit findings', function () {
-    $exit = Artisan::call('security:audit', ['--output' => 'json']);
+    // --offline: the dependency check needs network access; it has its own tests below.
+    $exit = Artisan::call('security:audit', ['--output' => 'json', '--offline' => true]);
     $report = json_decode(Artisan::output(), true);
 
     $serious = array_values(array_filter(
