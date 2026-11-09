@@ -51,40 +51,55 @@ class User extends Authenticatable implements MustVerifyEmail
 
     // ─── Team Relationships ──────────────────────────────────────────
 
+    /**
+     * Per-instance memo for getTeamAttribute(), keyed by the current_team it
+     * was resolved for, so switching teams on the same instance re-resolves.
+     */
+    protected ?Team $teamMemo = null;
+
+    protected ?string $teamMemoFor = null;
+
+    /**
+     * The user's current team, provided they still hold a membership of it.
+     *
+     * Resolved from the database on every request (memoised within one) rather
+     * than cached in the session: a session copy kept granting access after the
+     * user was removed from the team or their membership expired.
+     */
     public function getTeamAttribute(): ?Team
     {
-        $team = session('current_team', false);
-        if ($team instanceof Team) {
+        if ($this->teamMemoFor !== null && $this->teamMemoFor === $this->current_team) {
+            return $this->teamMemo;
+        }
+
+        $this->teamMemoFor = $this->current_team;
+
+        return $this->teamMemo = $this->resolveCurrentTeam();
+    }
+
+    protected function resolveCurrentTeam(): ?Team
+    {
+        if (is_null($this->current_team) || ! ($team = Team::find($this->current_team))) {
+            return null;
+        }
+
+        $teamUser = TeamUser::where('team_id', $team->id)->where('user_id', $this->id)->first();
+
+        if (! $teamUser) {
+            return null;
+        }
+
+        if (! $teamUser->expired) {
             return $team;
         }
 
-        // Clear invalid session data
-        if ($team !== false) {
-            session()->forget('current_team');
+        // The last remaining member of a team gets a grace period rather than
+        // being locked out of it.
+        if (TeamUser::where('team_id', $team->id)->count() === 1) {
+            $teamUser->update(['expires' => now()->addDays(config('wiretier.last_team_member_grace'))->format('Y-m-d')]);
+
+            return $team;
         }
-
-        if (! is_null($this->current_team) && $team = Team::find($this->current_team)) {
-            $teamUser = TeamUser::where('team_id', $team->id)->where('user_id', $this->id)->first();
-
-            if ($teamUser) {
-                if ($teamUser->expired) {
-                    if (TeamUser::where('team_id', $team->id)->count() === 1) {
-                        TeamUser::where('team_id', $team->id)->where('user_id', $this->id)
-                            ->update(['expires' => now()->addDays(config('wiretier.last_team_member_grace'))->format('Y-m-d')]);
-
-                        return $team;
-                    }
-
-                    return null;
-                }
-
-                session(['current_team' => $team]);
-
-                return $team;
-            }
-        }
-
-        session()->forget('current_team');
 
         return null;
     }

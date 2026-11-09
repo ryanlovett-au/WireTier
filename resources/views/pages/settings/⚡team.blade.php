@@ -7,6 +7,9 @@ use App\Models\Team;
 use App\Models\TeamInvitation;
 use App\Models\TeamUser;
 use App\Models\User;
+use App\Models\ZerotierNetwork;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Title;
@@ -219,10 +222,6 @@ new #[Title('Team Settings')] class extends Component
 
         AuditLog::record('team.updated', 'team', $this->current_team->id, ['old_name' => $oldName, 'new_name' => $this->edit_team_name]);
 
-        if (auth()->user()->current_team == $this->current_team->id) {
-            session(['current_team' => $this->current_team]);
-        }
-
         Flux::toast(variant: 'success', heading: 'Saved', text: 'The team name has been changed.');
     }
 
@@ -336,7 +335,6 @@ new #[Title('Team Settings')] class extends Component
     {
         TeamUser::where('user_id', auth()->user()->id)->where('team_id', $this->current_team->id)->delete();
         AuditLog::record('team.member_left', 'team', $this->current_team->id);
-        session()->forget('current_team');
         Flux::modal('leaveTeamConfirm')->close();
         $this->redirect('/settings/teams');
     }
@@ -347,10 +345,36 @@ new #[Title('Team Settings')] class extends Component
             return;
         }
 
-        TeamUser::where('team_id', $this->current_team->id)->delete();
-        TeamInvitation::where('team_id', $this->current_team->id)->delete();
-        Team::where('id', $this->current_team->id)->delete();
-        AuditLog::record('team.deleted', 'team', $this->current_team->id, ['name' => $this->current_team->name]);
+        $teamId = $this->current_team->id;
+
+        // Release the team's networks: drop WireTier's records (not the
+        // networks on the controller) so they reappear as untracked for a
+        // system admin to import into another team, instead of being orphaned
+        // under a team that no longer exists.
+        $networks = ZerotierNetwork::where('team_id', $teamId)->get();
+
+        DB::transaction(function () use ($teamId, $networks) {
+            foreach ($networks as $network) {
+                $network->members()->delete();
+                $network->delete();
+            }
+
+            TeamUser::where('team_id', $teamId)->delete();
+            TeamInvitation::where('team_id', $teamId)->delete();
+            Team::where('id', $teamId)->delete();
+        });
+
+        foreach ($networks->pluck('zerotier_token_id')->unique() as $tokenId) {
+            Cache::forget("team_{$teamId}_networks_{$tokenId}");
+            Cache::forget("zt_controller_networks_{$tokenId}");
+        }
+        Cache::forget("zt_stats_authorised_{$teamId}");
+        Cache::forget('zt_stats_authorised_all');
+
+        AuditLog::record('team.deleted', 'team', $teamId, [
+            'name' => $this->current_team->name,
+            'released_networks' => $networks->pluck('network_id')->all(),
+        ]);
 
         return $this->redirect('/settings/teams');
     }

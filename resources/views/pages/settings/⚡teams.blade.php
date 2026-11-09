@@ -45,7 +45,6 @@ new #[Title('Teams')] class extends Component
             return;
         }
 
-        session(['current_team' => $team]);
         auth()->user()->current_team = $id;
         auth()->user()->save();
 

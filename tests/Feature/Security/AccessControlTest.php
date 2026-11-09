@@ -231,3 +231,37 @@ test('changeExpiry cannot target a membership row of another team', function () 
 
     expect($betaRow->fresh()->expires)->toBe('2026-01-01');
 });
+
+// ─── Current team resolution ─────────────────────────────────────────────
+
+test('a user removed from a team loses access on the next request', function () {
+    $this->actingAs($this->alphaMember);
+
+    // Previously the team was cached in the session on first use and never
+    // re-checked, so a removed member kept reading the team's data.
+    session(['current_team' => Team::find(S::ALPHA_TEAM_ID)]);
+    TeamUser::where('team_id', S::ALPHA_TEAM_ID)->where('user_id', $this->alphaMember->id)->delete();
+
+    expect($this->alphaMember->fresh()->team)->toBeNull();
+
+    Livewire::test('pages::zerotier.members', ['networkId' => S::ALPHA_NETWORK_ID, 'tokenId' => S::ALPHA_TOKEN_ID])
+        ->assertRedirect('/settings/teams');
+});
+
+test('an expired membership no longer grants the team', function () {
+    TeamUser::where('team_id', S::ALPHA_TEAM_ID)->where('user_id', $this->alphaMember->id)
+        ->update(['expires' => now()->subDay()->format('Y-m-d')]);
+
+    expect($this->alphaMember->fresh()->team)->toBeNull();
+});
+
+test('switching current_team on the same instance re-resolves the team', function () {
+    TeamUser::create(['team_id' => S::BETA_TEAM_ID, 'user_id' => $this->alphaMember->id, 'role' => 'viewer']);
+    $user = $this->alphaMember->fresh();
+
+    expect($user->team->id)->toBe(S::ALPHA_TEAM_ID);
+
+    $user->current_team = S::BETA_TEAM_ID;
+
+    expect($user->team->id)->toBe(S::BETA_TEAM_ID);
+});

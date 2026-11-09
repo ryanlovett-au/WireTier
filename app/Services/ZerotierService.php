@@ -84,7 +84,7 @@ class ZerotierService
     {
         $response = $this->client()->get('/status');
 
-        return $response->json();
+        return $response->json() ?? [];
     }
 
     // ─── Controller ──────────────────────────────────────────────────
@@ -93,14 +93,14 @@ class ZerotierService
     {
         $response = $this->client()->get('/controller');
 
-        return $response->json();
+        return $response->json() ?? [];
     }
 
     // ─── Controller Networks ─────────────────────────────────────────
 
     public function getControllerNetworks(): array
     {
-        $response = $this->client()->get('/controller/network');
+        $response = $this->client()->get('/controller/network')->throw();
 
         return $response->json() ?? [];
     }
@@ -108,9 +108,10 @@ class ZerotierService
     public function getControllerNetwork(string $networkId): array
     {
         self::validatePathSegment($networkId, 'networkId');
-        $response = $this->client()->get("/controller/network/{$networkId}");
+        // Throw on failure so a missing/failed network never reads as an empty config.
+        $response = $this->client()->get("/controller/network/{$networkId}")->throw();
 
-        return $response->json();
+        return $response->json() ?? [];
     }
 
     public function createNetwork(?array $config = null): array
@@ -125,7 +126,7 @@ class ZerotierService
         self::validatePathSegment($nodeAddress, 'nodeAddress');
         $response = $this->client()->post("/controller/network/{$nodeAddress}______", $config ?? []);
 
-        return $response->json();
+        return $response->json() ?? [];
     }
 
     public function updateNetwork(string $networkId, array $config): array
@@ -164,7 +165,7 @@ class ZerotierService
         self::validatePathSegment($nodeId, 'nodeId');
         $response = $this->client()->get("/controller/network/{$networkId}/member/{$nodeId}")->throw();
 
-        return $response->json();
+        return $response->json() ?? [];
     }
 
     public function updateNetworkMember(string $networkId, string $nodeId, array $config): array
@@ -210,7 +211,7 @@ class ZerotierService
         self::validatePathSegment($address, 'address');
         $response = $this->client()->get("/peer/{$address}");
 
-        return $response->json();
+        return $response->json() ?? [];
     }
 
     // ─── Node Networks (joined) ──────────────────────────────────────
@@ -227,7 +228,7 @@ class ZerotierService
         self::validatePathSegment($networkId, 'networkId');
         $response = $this->client()->post("/network/{$networkId}", []);
 
-        return $response->json();
+        return $response->json() ?? [];
     }
 
     public function leaveNetwork(string $networkId): bool

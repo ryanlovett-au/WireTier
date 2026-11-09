@@ -466,3 +466,38 @@ test('syncNetwork handles peer fetch failure gracefully', function () {
     expect($result)->toBeTrue();
     expect(ZerotierMember::where('zerotier_network_id', $network->id)->count())->toBe(1);
 });
+
+test('a malformed response for one network does not stop the sync of the others', function () {
+    Http::fake(function ($request) {
+        $url = $request->url();
+        // Alpha's member list comes back as a JSON string instead of an
+        // object; previously this raised an uncaught TypeError.
+        if (str_contains($url, SecurityTestSeeder::ALPHA_NETWORK_ID.'/member')) {
+            return Http::response('"oops"');
+        }
+        if (preg_match('#/member/([a-f0-9]+)$#', $url, $m)) {
+            return Http::response(['address' => $m[1], 'authorized' => true, 'ipAssignments' => []]);
+        }
+        if (str_contains($url, '/member')) {
+            return Http::response(['dddd000001' => 1]);
+        }
+        if (preg_match('#/controller/network/([a-zA-Z0-9_]+)$#', $url, $m)) {
+            return Http::response(['nwid' => $m[1], 'name' => 'Net', 'private' => true]);
+        }
+
+        return Http::response([]);
+    });
+
+    $synced = ZerotierSyncService::syncAll();
+
+    expect($synced)->toBeGreaterThanOrEqual(1);
+    expect(ZerotierMember::whereHas('network', fn ($q) => $q->where('network_id', SecurityTestSeeder::BETA_NETWORK_ID))->where('node_id', 'dddd000001')->exists())->toBeTrue();
+});
+
+test('an empty response body for a network config is treated as missing, not a crash', function () {
+    Http::fake(fn () => Http::response('', 200));
+
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+
+    expect(fn () => ZerotierSyncService::syncNetwork($network, force: true))->not->toThrow(Throwable::class);
+});

@@ -138,7 +138,7 @@ class ZerotierSyncService
                             ...$runtime,
                         ]
                     );
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
                     // A single member's detail fetch failing (e.g. a transient
                     // error or rate limit) must not drop it from the DB — the
                     // controller still lists it, so leave the existing row intact.
@@ -158,7 +158,10 @@ class ZerotierSyncService
             Cache::forget("network_{$network->id}_members");
 
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // Catch Throwable, not just Exception: one network's bad response
+            // (e.g. a TypeError from malformed data) must not abort the sync of
+            // every other network in the scheduled run.
             Log::warning("Failed to sync network {$network->network_id}: {$e->getMessage()}");
 
             return false;

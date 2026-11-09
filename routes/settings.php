@@ -41,7 +41,6 @@ Route::middleware(['auth', 'verified', 'throttle:60,1'])->group(function () {
 
         $user->current_team = $id;
         $user->save();
-        session()->forget('current_team');
 
         AuditLog::record('team.switched', 'team', $id, ['team_name' => $team->name]);
 

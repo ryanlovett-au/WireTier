@@ -1,15 +1,17 @@
 <?php
 
+use App\Models\Team;
 use App\Models\User;
 
-test('User team clears invalid session data', function () {
+test('User team ignores session data and resolves from membership', function () {
     $user = User::factory()->create();
     $this->actingAs($user);
 
-    // Put invalid (non-Team) data in session
+    // The team is no longer cached in the session (a stale copy kept granting
+    // access after removal), so neither junk nor a real Team there has effect.
     session(['current_team' => 'invalid-string']);
-
-    // Accessing team should clear the invalid session data and return null
     expect($user->team)->toBeNull();
-    expect(session('current_team'))->toBeNull();
+
+    session(['current_team' => Team::factory()->create()]);
+    expect($user->fresh()->team)->toBeNull();
 });

@@ -1,9 +1,12 @@
 <?php
 
+use App\Models\AuditLog;
 use App\Models\Team;
 use App\Models\TeamInvitation;
 use App\Models\TeamUser;
 use App\Models\User;
+use App\Models\ZerotierMember;
+use App\Models\ZerotierNetwork;
 use Database\Seeders\SecurityTestSeeder;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
@@ -340,4 +343,22 @@ test('team model does not expose sensitive fields in serialization', function ()
 
     // Team only has name, icon, colour — all non-sensitive display fields
     expect($fillable)->toBe(['name', 'icon', 'colour']);
+});
+
+test('deleting a team releases its networks instead of orphaning them', function () {
+    $this->actingAs($this->alphaAdmin);
+    $network = ZerotierNetwork::where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)->firstOrFail();
+    ZerotierMember::create(['zerotier_network_id' => $network->id, 'node_id' => 'aabb000001']);
+
+    Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ALPHA_TEAM_ID])
+        ->call('deleteTeam')
+        ->assertRedirect('/settings/teams');
+
+    // WireTier's records are gone, so the network shows as untracked again
+    // for a system admin to import; nothing is deleted on the controller.
+    expect(ZerotierNetwork::where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)->exists())->toBeFalse();
+    expect(ZerotierMember::where('zerotier_network_id', $network->id)->exists())->toBeFalse();
+
+    $log = AuditLog::where('action', 'team.deleted')->latest()->first();
+    expect($log->details['released_networks'])->toContain($network->network_id);
 });
