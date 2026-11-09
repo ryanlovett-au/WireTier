@@ -262,7 +262,7 @@ new class extends Component {
                             copied: false,
                             async copy() {
                                 try {
-                                    await navigator.clipboard.writeText('{{ $manualSetupKey }}');
+                                    await navigator.clipboard.writeText({{ Js::from($manualSetupKey) }});
                                     this.copied = true;
                                     setTimeout(() => this.copied = false, 1500);
                                 } catch (e) {

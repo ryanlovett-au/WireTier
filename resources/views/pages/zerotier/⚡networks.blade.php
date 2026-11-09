@@ -545,8 +545,8 @@ new #[Title('ZeroTier Networks')] class extends Component
                             </flux:table.cell>
                             <flux:table.cell>
                                 <div class="flex gap-1">
-                                    <flux:button size="xs" icon="arrow-down-tray" wire:click="importNetwork('{{ $uNetwork['nwid'] }}')">Import</flux:button>
-                                    <flux:button size="xs" icon="trash" variant="danger" wire:click="confirmDeleteUntracked('{{ $uNetwork['nwid'] }}', '{{ e($uNetwork['name'] ?? '') }}')" tooltip="Delete from controller" />
+                                    <flux:button size="xs" icon="arrow-down-tray" wire:click="importNetwork({{ Js::from($uNetwork['nwid']) }})">Import</flux:button>
+                                    <flux:button size="xs" icon="trash" variant="danger" wire:click="confirmDeleteUntracked({{ Js::from($uNetwork['nwid']) }}, {{ Js::from($uNetwork['name'] ?? '') }})" tooltip="Delete from controller" />
                                 </div>
                             </flux:table.cell>
                         </flux:table.row>
@@ -609,8 +609,8 @@ new #[Title('ZeroTier Networks')] class extends Component
                                 Members
                             </flux:button>
                             @if (auth()->user()->canManageNetworks())
-                                <flux:button size="sm" icon="cog-6-tooth" wire:click="$dispatch('open-network-edit', { networkId: '{{ $network['nwid'] ?? $network['id'] }}', tokenId: '{{ $selectedToken }}' })" tooltip="Network Settings" />
-                                <flux:button size="sm" icon="trash" variant="danger" wire:click="confirmDeleteNetwork('{{ $network['nwid'] ?? $network['id'] }}', {{ Js::from($network['name'] ?? '') }})" tooltip="Delete Network" />
+                                <flux:button size="sm" icon="cog-6-tooth" wire:click="$dispatch('open-network-edit', { networkId: {{ Js::from($network['nwid'] ?? $network['id']) }}, tokenId: {{ Js::from($selectedToken) }} })" tooltip="Network Settings" />
+                                <flux:button size="sm" icon="trash" variant="danger" wire:click="confirmDeleteNetwork({{ Js::from($network['nwid'] ?? $network['id']) }}, {{ Js::from($network['name'] ?? '') }})" tooltip="Delete Network" />
                             @endif
                         </div>
                     </div>
@@ -673,9 +673,9 @@ new #[Title('ZeroTier Networks')] class extends Component
                 @foreach ($subnet_suggestions as $suggestion)
                     <button
                         type="button"
-                        wire:click="$set('new_network_subnet', '{{ $suggestion }}')"
+                        wire:click="$set('new_network_subnet', {{ Js::from($suggestion) }})"
                         class="px-2.5 py-1 rounded-md text-xs font-mono border border-zinc-300 text-zinc-600 bg-white hover:border-zinc-500 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-600 transition-colors"
-                        :style="$wire.new_network_subnet === '{{ $suggestion }}' ? 'background:#18181b;color:#fff;border-color:#18181b;' : ''"
+                        :style="$wire.new_network_subnet === {{ Js::from($suggestion) }} ? 'background:#18181b;color:#fff;border-color:#18181b;' : ''"
                     >{{ $suggestion }}</button>
                 @endforeach
                 <button

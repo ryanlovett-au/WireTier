@@ -121,7 +121,7 @@ test('team role change is logged', function () {
         ->where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)->first();
 
     Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ALPHA_TEAM_ID])
-        ->call('changeRoleModal', $memberTu->toArray())
+        ->call('changeRoleModal', (string) $memberTu->id)
         ->set('change_user_role', 'viewer')
         ->call('changeRole');
 

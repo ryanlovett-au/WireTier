@@ -591,7 +591,7 @@ new class extends Component
                         <div wire:key="pool-{{ $i }}" class="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
                             <flux:icon name="circle-stack" class="size-4 text-zinc-400 shrink-0" />
                             <span class="font-mono text-sm flex-1">{{ $pool['ipRangeStart'] }} &rarr; {{ $pool['ipRangeEnd'] }}</span>
-                            <flux:button size="xs" icon="x-mark" variant="ghost" wire:click="removeIpPool({{ $i }})" />
+                            <flux:button size="xs" icon="x-mark" variant="ghost" wire:click="removeIpPool({{ (int) $i }})" />
                         </div>
                     @endforeach
                 </div>
@@ -637,7 +637,7 @@ new class extends Component
                                     @endif
                                 </td>
                                 <td class="py-2.5 px-2 text-right">
-                                    <flux:button size="xs" icon="trash" variant="ghost" class="text-red-400 hover:text-red-600" wire:click="removeRoute({{ $i }})" />
+                                    <flux:button size="xs" icon="trash" variant="ghost" class="text-red-400 hover:text-red-600" wire:click="removeRoute({{ (int) $i }})" />
                                 </td>
                             </tr>
                         @endforeach

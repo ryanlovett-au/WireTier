@@ -213,7 +213,7 @@ test('changeRole cannot target a membership row of another team', function () {
     $this->actingAs($this->alphaAdmin);
 
     Livewire::test('pages::settings.team', ['id' => S::ALPHA_TEAM_ID])
-        ->set('change_user', ['id' => (string) $betaRow->id])
+        ->call('changeRoleModal', (string) $betaRow->id)
         ->set('change_user_role', 'admin')
         ->call('changeRole');
 
@@ -225,7 +225,7 @@ test('changeExpiry cannot target a membership row of another team', function () 
     $this->actingAs($this->alphaAdmin);
 
     Livewire::test('pages::settings.team', ['id' => S::ALPHA_TEAM_ID])
-        ->set('change_user', ['id' => (string) $betaRow->id])
+        ->call('changeExpiryModal', (string) $betaRow->id)
         ->set('change_user_expiry', '2099-01-01')
         ->call('changeExpiry');
 
@@ -265,3 +265,17 @@ test('switching current_team on the same instance re-resolves the team', functio
 
     expect($user->team->id)->toBe(S::BETA_TEAM_ID);
 });
+
+test('the membership being edited cannot be swapped from the client', function () {
+    $this->actingAs($this->alphaAdmin);
+
+    Livewire::test('pages::settings.team', ['id' => S::ALPHA_TEAM_ID])
+        ->set('change_user', ['id' => 'anything']);
+})->throws(CannotUpdateLockedPropertyException::class);
+
+test('team colour and icon allow-lists cannot be extended from the client', function () {
+    $this->actingAs($this->alphaAdmin);
+
+    Livewire::test('pages::settings.teams')
+        ->set('icons', ['../../evil']);
+})->throws(CannotUpdateLockedPropertyException::class);

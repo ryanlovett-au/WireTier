@@ -477,7 +477,7 @@ new #[Title('Network Members')] class extends Component
             </div>
             <div class="flex items-center gap-2">
                 @if (auth()->user()->canManageNetworks())
-                    <flux:button size="sm" icon="cog-6-tooth" wire:click="$dispatch('open-network-edit', { networkId: '{{ $networkId }}', tokenId: '{{ $tokenId }}' })">Settings</flux:button>
+                    <flux:button size="sm" icon="cog-6-tooth" wire:click="$dispatch('open-network-edit', { networkId: {{ Js::from($networkId) }}, tokenId: {{ Js::from($tokenId) }} })">Settings</flux:button>
                 @endif
                 <flux:button size="sm" icon="arrow-path" wire:click="syncAndReload">Refresh</flux:button>
             </div>
@@ -597,12 +597,12 @@ new #[Title('Network Members')] class extends Component
                                 <flux:table.cell>
                                     <div class="flex gap-1">
                                         @if (! ($member['authorized'] ?? false))
-                                            <flux:button size="xs" icon="check" style="background:#16a34a;color:#fff;border-color:#16a34a;" tooltip="Authorise" wire:click="authorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
+                                            <flux:button size="xs" icon="check" style="background:#16a34a;color:#fff;border-color:#16a34a;" tooltip="Authorise" wire:click="authorizeMember({{ Js::from($member['address'] ?? $member['id']) }})" />
                                         @else
-                                            <flux:button size="xs" icon="x-mark" style="background:#dc2626;color:#fff;border-color:#dc2626;" tooltip="Deauthorise" wire:click="deauthorizeMember('{{ $member['address'] ?? $member['id'] }}')" />
+                                            <flux:button size="xs" icon="x-mark" style="background:#dc2626;color:#fff;border-color:#dc2626;" tooltip="Deauthorise" wire:click="deauthorizeMember({{ Js::from($member['address'] ?? $member['id']) }})" />
                                         @endif
-                                        <flux:button size="xs" icon="pencil" tooltip="Edit Member" wire:click="editMemberModal('{{ $member['address'] ?? $member['id'] }}')" />
-                                        <flux:button size="xs" icon="trash" style="background:#18181b;color:#fff;border-color:#18181b;" tooltip="Delete" wire:click="confirmDeleteMember('{{ $member['address'] ?? $member['id'] }}')" />
+                                        <flux:button size="xs" icon="pencil" tooltip="Edit Member" wire:click="editMemberModal({{ Js::from($member['address'] ?? $member['id']) }})" />
+                                        <flux:button size="xs" icon="trash" style="background:#18181b;color:#fff;border-color:#18181b;" tooltip="Delete" wire:click="confirmDeleteMember({{ Js::from($member['address'] ?? $member['id']) }})" />
                                     </div>
                                 </flux:table.cell>
                             @endif
@@ -647,7 +647,7 @@ new #[Title('Network Members')] class extends Component
                     @foreach ($edit_ip_assignments as $index => $ip)
                         <div wire:key="ip-{{ $index }}" class="flex items-center gap-2">
                             <span class="font-mono text-sm flex-1">{{ $ip }}</span>
-                            <flux:button size="xs" icon="x-mark" variant="danger" wire:click="removeIpAssignment({{ $index }})" />
+                            <flux:button size="xs" icon="x-mark" variant="danger" wire:click="removeIpAssignment({{ (int) $index }})" />
                         </div>
                     @endforeach
                 </div>

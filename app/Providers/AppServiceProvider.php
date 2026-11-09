@@ -34,8 +34,10 @@ class AppServiceProvider extends ServiceProvider
         $this->registerAuditListeners();
 
         Livewire::setUpdateRoute(function ($handle) {
+            // throttle:300,1 (per user) caps flooding of heavy actions while
+            // leaving room for polling and the debounced live rules editor.
             return Route::post('/livewire/update', $handle)
-                ->middleware(['web', 'auth']);
+                ->middleware(['web', 'auth', 'throttle:300,1']);
         });
     }
 

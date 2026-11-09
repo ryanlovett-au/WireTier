@@ -92,7 +92,7 @@ test('changeRole updates team user role', function () {
         ->where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)->first();
 
     Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ALPHA_TEAM_ID])
-        ->call('changeRoleModal', $memberTu->toArray())
+        ->call('changeRoleModal', (string) $memberTu->id)
         ->set('change_user_role', 'viewer')
         ->call('changeRole');
 
@@ -110,7 +110,7 @@ test('changeExpiry updates team user expiry', function () {
     $newExpiry = now()->addMonths(6)->format('Y-m-d');
 
     Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ALPHA_TEAM_ID])
-        ->call('changeExpiryModal', $memberTu->toArray())
+        ->call('changeExpiryModal', (string) $memberTu->id)
         ->set('change_user_expiry', $newExpiry)
         ->call('changeExpiry');
 
@@ -233,7 +233,7 @@ test('member cannot change roles', function () {
         ->where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)->first();
 
     Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ALPHA_TEAM_ID])
-        ->set('change_user', $viewerTu->toArray())
+        ->call('changeRoleModal', (string) $viewerTu->id)
         ->set('change_user_role', 'admin')
         ->call('changeRole');
 
@@ -311,7 +311,7 @@ test('changeRole rejects non-admin role on admin team', function () {
         ->where('team_id', SecurityTestSeeder::ADMIN_TEAM_ID)->first();
 
     Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ADMIN_TEAM_ID])
-        ->call('changeRoleModal', $adminTu->toArray())
+        ->call('changeRoleModal', (string) $adminTu->id)
         ->set('change_user_role', 'viewer')
         ->call('changeRole');
 
@@ -361,4 +361,17 @@ test('deleting a team releases its networks instead of orphaning them', function
 
     $log = AuditLog::where('action', 'team.deleted')->latest()->first();
     expect($log->details['released_networks'])->toContain($network->network_id);
+});
+
+test('the role and expiry modals name the member being edited', function () {
+    $this->actingAs($this->alphaAdmin);
+
+    $memberTu = TeamUser::where('user_id', $this->alphaMember->id)
+        ->where('team_id', SecurityTestSeeder::ALPHA_TEAM_ID)->first();
+
+    Livewire::test('pages::settings.team', ['id' => SecurityTestSeeder::ALPHA_TEAM_ID])
+        ->call('changeRoleModal', (string) $memberTu->id)
+        ->assertSee('Change the role for '.$this->alphaMember->name)
+        ->call('changeExpiryModal', (string) $memberTu->id)
+        ->assertSee('Change the membership expiry for '.$this->alphaMember->name);
 });

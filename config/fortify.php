@@ -96,12 +96,16 @@ return [
     |--------------------------------------------------------------------------
     |
     | Here you may specify which middleware Fortify will assign to the routes
-    | that it registers with the application. If necessary, you may change
-    | these middleware but typically this provided default is preferred.
+    | that it registers with the application.
+    |
+    | throttle:auth (FortifyServiceProvider) leaves GET page views unmetered,
+    | caps password-reset POSTs at 5/min per email+IP so an inbox can't be
+    | flooded, and gives other POSTs a 20/min/IP net. The per-endpoint
+    | limiters (limiters.login, limiters.two-factor) keep running on top.
     |
     */
 
-    'middleware' => ['web'],
+    'middleware' => ['web', 'throttle:auth'],
 
     /*
     |--------------------------------------------------------------------------

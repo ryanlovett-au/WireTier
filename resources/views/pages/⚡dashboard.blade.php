@@ -106,7 +106,7 @@ new #[Title('Dashboard')] class extends Component
                 <div
                     x-data="{ label: '' }"
                     x-init="setInterval(() => {
-                        let ts = {{ $this->ztStats['last_updated'] ?? 0 }};
+                        let ts = {{ (int) ($this->ztStats['last_updated'] ?? 0) }};
                         if (!ts) { label = 'pending'; return; }
                         let s = Math.floor(Date.now()/1000) - ts;
                         if (s < 5) label = 'just now';
@@ -138,7 +138,7 @@ new #[Title('Dashboard')] class extends Component
             <div
                 x-data="{ label: '' }"
                 x-init="setInterval(() => {
-                    let ts = {{ $this->untrackedStats['last_updated'] ?? 0 }};
+                    let ts = {{ (int) ($this->untrackedStats['last_updated'] ?? 0) }};
                     if (!ts) { label = 'pending'; return; }
                     let s = Math.floor(Date.now()/1000) - ts;
                     if (s < 5) label = 'just now';

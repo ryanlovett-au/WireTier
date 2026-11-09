@@ -68,5 +68,31 @@ class FortifyServiceProvider extends ServiceProvider
 
             return Limit::perMinute(5)->by($throttleKey);
         });
+
+        // Group limiter for the whole Fortify route surface
+        // (config('fortify.middleware')), ported from Moonscape/OMS. GET page
+        // views aren't metered: a normal sign-up flow touches several auth
+        // pages in under a minute, and a blanket per-IP throttle would 429 a
+        // legitimate user. The per-credential 'login' and 'two-factor'
+        // limiters above still run on their own routes; whichever caps first
+        // wins.
+        RateLimiter::for('auth', function (Request $request) {
+            if (in_array($request->method(), ['GET', 'HEAD'], true)) {
+                return Limit::none();
+            }
+
+            // Password-reset POSTs: tight and keyed by email, so one victim's
+            // inbox can't be flooded with reset links.
+            if ($request->is('forgot-password', 'reset-password')) {
+                $key = Str::transliterate(Str::lower((string) $request->input('email')).'|'.$request->ip());
+
+                return Limit::perMinute(5)->by($key);
+            }
+
+            // Other state-changing POSTs (register, logout, 2FA setup, resend
+            // verification): a generous per-IP net that a full sign-up flow
+            // won't trip but that still caps scripted flooding.
+            return Limit::perMinute(20)->by((string) $request->ip());
+        });
     }
 }

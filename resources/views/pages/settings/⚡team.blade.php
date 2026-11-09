@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -24,6 +25,8 @@ new #[Title('Team Settings')] class extends Component
 
     public string $action = 'view';
 
+    /** The membership being edited; set only by selectTeamUser(). */
+    #[Locked]
     public array $change_user = [];
 
     public string $change_user_role = '';
@@ -122,7 +125,7 @@ new #[Title('Team Settings')] class extends Component
         return TeamInvitation::where('team_id', $this->current_team->id)->get();
     }
 
-    public function changeRoleModal($teamUser): void
+    public function changeRoleModal(string $teamUserId): void
     {
         if (! $this->canAdminister()) {
             Flux::toast(variant: 'danger', heading: 'Permission Denied', text: 'You do not have permission to change roles.');
@@ -130,8 +133,11 @@ new #[Title('Team Settings')] class extends Component
             return;
         }
 
-        $this->change_user = $teamUser;
-        $this->change_user_role = $teamUser['role'];
+        if (! $this->selectTeamUser($teamUserId)) {
+            return;
+        }
+
+        $this->change_user_role = $this->change_user['role'];
         Flux::modal('change_role_modal')->show();
     }
 
@@ -172,15 +178,38 @@ new #[Title('Team Settings')] class extends Component
         Flux::toast(variant: 'success', heading: 'Role Updated', text: 'The team member role has been updated.');
     }
 
-    public function changeExpiryModal($teamUser): void
+    public function changeExpiryModal(string $teamUserId): void
     {
         if (! $this->canAdminister()) {
             return;
         }
 
-        $this->change_user = $teamUser;
-        $this->change_user_expiry = $teamUser['expires'] ?? now()->addYear()->format('Y-m-d');
+        if (! $this->selectTeamUser($teamUserId)) {
+            return;
+        }
+
+        $this->change_user_expiry = $this->change_user['expires'] ?? now()->addYear()->format('Y-m-d');
         Flux::modal('change_expiry_modal')->show();
+    }
+
+    /**
+     * Load the membership being edited from the server (only this team's
+     * rows), rather than trusting a model the page serialised to the client.
+     */
+    protected function selectTeamUser(string $teamUserId): bool
+    {
+        $teamUser = $this->teamUserOnThisTeam($teamUserId);
+
+        if (! $teamUser) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Team member not found.');
+
+            return false;
+        }
+
+        $this->change_user = $teamUser->only(['id', 'user_id', 'role', 'expires'])
+            + ['name' => $teamUser->user?->name ?? ''];
+
+        return true;
     }
 
     public function changeExpiry(): void
@@ -450,9 +479,9 @@ new #[Title('Team Settings')] class extends Component
                         <flux:table.cell>
                             @if ($member->user->id != auth()->user()->id)
                                 <div class="flex gap-1">
-                                    <flux:button size="xs" icon="arrows-right-left" tooltip="Change Role" wire:click="changeRoleModal({{ $member }})" />
-                                    <flux:button size="xs" icon="clock" tooltip="Change Expiry" wire:click="changeExpiryModal({{ $member }})" />
-                                    <flux:button size="xs" icon="x-mark" tooltip="Remove" wire:click="removeUserModal('{{ $member->user_id }}')" />
+                                    <flux:button size="xs" icon="arrows-right-left" tooltip="Change Role" wire:click="changeRoleModal({{ Js::from($member->id) }})" />
+                                    <flux:button size="xs" icon="clock" tooltip="Change Expiry" wire:click="changeExpiryModal({{ Js::from($member->id) }})" />
+                                    <flux:button size="xs" icon="x-mark" tooltip="Remove" wire:click="removeUserModal({{ Js::from($member->user_id) }})" />
                                 </div>
                             @endif
                         </flux:table.cell>
@@ -565,7 +594,7 @@ new #[Title('Team Settings')] class extends Component
         <div>
             <flux:heading size="lg" class="mb-6">Change Role</flux:heading>
             <flux:subheading class="mb-4">
-                Change the role for {{ $this->change_user['user']['name'] ?? '' }} in the {{ $this->current_team->name }} team.
+                Change the role for {{ $this->change_user['name'] ?? '' }} in the {{ $this->current_team->name }} team.
             </flux:subheading>
             <flux:radio.group wire:model="change_user_role" variant="cards" :indicator="false" class="flex-col mb-6">
                 @foreach ($this->availableRoles as $key => $role)
@@ -592,7 +621,7 @@ new #[Title('Team Settings')] class extends Component
         <div>
             <flux:heading size="lg" class="mb-6">Change Expiry</flux:heading>
             <flux:subheading class="mb-4">
-                Change the membership expiry for {{ $this->change_user['user']['name'] ?? '' }}.
+                Change the membership expiry for {{ $this->change_user['name'] ?? '' }}.
             </flux:subheading>
             <flux:input wire:model="change_user_expiry" type="date" class="mb-6" />
         </div>

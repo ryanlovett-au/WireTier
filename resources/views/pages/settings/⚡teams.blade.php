@@ -3,6 +3,7 @@
 use App\Models\AuditLog;
 use App\Models\Team;
 use App\Models\TeamUser;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
@@ -16,8 +17,12 @@ new #[Title('Teams')] class extends Component
 
     public string $new_team_icon = 'users';
 
+    // Locked: these are the validation allow-lists for createTeam(), so the
+    // client must not be able to add its own values.
+    #[Locked]
     public array $colours = ['red', 'orange', 'yellow', 'green', 'cyan', 'blue', 'purple', 'pink', 'zinc'];
 
+    #[Locked]
     public array $icons = ['users', 'building-office', 'server', 'globe-alt', 'shield-check', 'cloud', 'cpu-chip', 'signal', 'wifi', 'key', 'lock-closed', 'command-line', 'circle-stack', 'cube', 'squares-2x2', 'wrench', 'cog-6-tooth', 'beaker', 'academic-cap', 'rocket-launch'];
 
     public function mount()
@@ -153,7 +158,7 @@ new #[Title('Teams')] class extends Component
                     <div class="flex flex-wrap gap-2 mt-2">
                         @foreach ($colours as $colour)
                             <button
-                                wire:click="$set('new_team_colour', '{{ $colour }}')"
+                                wire:click="$set('new_team_colour', {{ Js::from($colour) }})"
                                 class="w-8 h-8 rounded-full bg-{{ $colour }}-500 ring-2 {{ $new_team_colour === $colour ? 'ring-offset-2 ring-'.$colour.'-500' : 'ring-transparent' }}"
                             ></button>
                         @endforeach
@@ -165,7 +170,7 @@ new #[Title('Teams')] class extends Component
                     <div class="flex flex-wrap gap-2 mt-2">
                         @foreach ($icons as $icon)
                             <button
-                                wire:click="$set('new_team_icon', '{{ $icon }}')"
+                                wire:click="$set('new_team_icon', {{ Js::from($icon) }})"
                                 class="w-10 h-10 rounded-lg flex items-center justify-center {{ $new_team_icon === $icon ? 'bg-zinc-200 dark:bg-zinc-700' : 'hover:bg-zinc-100 dark:hover:bg-zinc-800' }}"
                             >
                                 <flux:icon name="{{ $icon }}" class="size-5" />
