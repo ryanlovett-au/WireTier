@@ -35,6 +35,26 @@ new #[Title('Team Settings')] class extends Component
 
     public string $invite_team_expires = '';
 
+    /**
+     * Whether the user may administer the team shown on THIS page. This page
+     * can show any team the user belongs to (/settings/team/{id}), so the
+     * check must not use isTeamAdmin(), which reflects the current team.
+     */
+    public function canAdminister(): bool
+    {
+        return auth()->user()->canAdministerTeam($this->current_team->id);
+    }
+
+    /** A membership row of this team, by id; null for rows of other teams. */
+    protected function teamUserOnThisTeam(mixed $id): ?TeamUser
+    {
+        if (! is_string($id) || $id === '') {
+            return null;
+        }
+
+        return TeamUser::where('id', $id)->where('team_id', $this->current_team->id)->first();
+    }
+
     #[Computed]
     public function isAdminTeam(): bool
     {
@@ -101,7 +121,7 @@ new #[Title('Team Settings')] class extends Component
 
     public function changeRoleModal($teamUser): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! $this->canAdminister()) {
             Flux::toast(variant: 'danger', heading: 'Permission Denied', text: 'You do not have permission to change roles.');
 
             return;
@@ -114,7 +134,7 @@ new #[Title('Team Settings')] class extends Component
 
     public function changeRole(): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! $this->canAdminister()) {
             return;
         }
 
@@ -132,7 +152,15 @@ new #[Title('Team Settings')] class extends Component
             return;
         }
 
-        TeamUser::where('id', $this->change_user['id'])->update(['role' => $this->change_user_role]);
+        $teamUser = $this->teamUserOnThisTeam($this->change_user['id'] ?? null);
+
+        if (! $teamUser) {
+            Flux::modal('change_role_modal')->close();
+
+            return;
+        }
+
+        $teamUser->update(['role' => $this->change_user_role]);
         AuditLog::record('team.role_changed', 'team', $this->current_team->id, ['user_id' => $this->change_user['user_id'] ?? null, 'new_role' => $this->change_user_role]);
 
         $this->change_user = [];
@@ -143,7 +171,7 @@ new #[Title('Team Settings')] class extends Component
 
     public function changeExpiryModal($teamUser): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! $this->canAdminister()) {
             return;
         }
 
@@ -154,11 +182,21 @@ new #[Title('Team Settings')] class extends Component
 
     public function changeExpiry(): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! $this->canAdminister()) {
             return;
         }
 
-        TeamUser::where('id', $this->change_user['id'])->update(['expires' => $this->change_user_expiry]);
+        $this->validate(['change_user_expiry' => 'required|date']);
+
+        $teamUser = $this->teamUserOnThisTeam($this->change_user['id'] ?? null);
+
+        if (! $teamUser) {
+            Flux::modal('change_expiry_modal')->close();
+
+            return;
+        }
+
+        $teamUser->update(['expires' => $this->change_user_expiry]);
         AuditLog::record('team.expiry_changed', 'team', $this->current_team->id, ['user_id' => $this->change_user['user_id'] ?? null, 'new_expiry' => $this->change_user_expiry]);
 
         $this->change_user = [];
@@ -169,7 +207,7 @@ new #[Title('Team Settings')] class extends Component
 
     public function editTeam(): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! $this->canAdminister()) {
             return;
         }
 
@@ -190,7 +228,7 @@ new #[Title('Team Settings')] class extends Component
 
     public function inviteTeam(): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! $this->canAdminister()) {
             return;
         }
 
@@ -261,7 +299,7 @@ new #[Title('Team Settings')] class extends Component
 
     public function removeUserModal($userId): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! $this->canAdminister()) {
             return;
         }
 
@@ -270,7 +308,13 @@ new #[Title('Team Settings')] class extends Component
         if ($userId == auth()->user()->id) {
             $this->remove_team_user_name = 'yourself';
         } else {
-            $this->remove_team_user_name = User::findOrFail($userId)->name;
+            $member = TeamUser::where('team_id', $this->current_team->id)->where('user_id', $userId)->with('user')->first();
+
+            if (! $member?->user) {
+                return;
+            }
+
+            $this->remove_team_user_name = $member->user->name;
         }
 
         Flux::modal('removeUserConfirm')->show();
@@ -278,7 +322,7 @@ new #[Title('Team Settings')] class extends Component
 
     public function removeUser(): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! $this->canAdminister()) {
             return;
         }
 
@@ -299,7 +343,7 @@ new #[Title('Team Settings')] class extends Component
 
     public function deleteTeam()
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! $this->canAdminister()) {
             return;
         }
 
@@ -313,7 +357,7 @@ new #[Title('Team Settings')] class extends Component
 
     public function cancelInvitation($invitationId): void
     {
-        if (! auth()->user()->isTeamAdmin()) {
+        if (! $this->canAdminister()) {
             return;
         }
 
@@ -355,7 +399,7 @@ new #[Title('Team Settings')] class extends Component
         </flux:card>
 
         {{-- Team Members --}}
-        @if (auth()->user()->isTeamAdmin())
+        @if ($this->canAdminister())
         <flux:card class="mb-6">
             <flux:heading class="mb-4">Team Members</flux:heading>
 

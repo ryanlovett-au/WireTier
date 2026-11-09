@@ -171,8 +171,7 @@ test('saveNetwork updates network config via API and DB record', function () {
     session()->forget('current_team');
 
     Livewire::test('pages::zerotier.network-edit-modal')
-        ->set('tokenId', SecurityTestSeeder::ALPHA_TOKEN_ID)
-        ->set('editing_network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)
+        ->call('open', SecurityTestSeeder::ALPHA_NETWORK_ID, SecurityTestSeeder::ALPHA_TOKEN_ID)
         ->set('edit_name', 'Updated Name')
         ->set('edit_private', false)
         ->call('saveNetwork')
@@ -272,8 +271,7 @@ test('viewer cannot save networks', function () {
     $originalName = $alphaNetwork->name;
 
     Livewire::test('pages::zerotier.network-edit-modal')
-        ->set('tokenId', SecurityTestSeeder::ALPHA_TOKEN_ID)
-        ->set('editing_network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)
+        ->call('open', SecurityTestSeeder::ALPHA_NETWORK_ID, SecurityTestSeeder::ALPHA_TOKEN_ID)
         ->set('edit_name', 'HACKED BY VIEWER')
         ->call('saveNetwork');
 
@@ -315,8 +313,7 @@ test('member can save networks', function () {
     session()->forget('current_team');
 
     Livewire::test('pages::zerotier.network-edit-modal')
-        ->set('tokenId', SecurityTestSeeder::ALPHA_TOKEN_ID)
-        ->set('editing_network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)
+        ->call('open', SecurityTestSeeder::ALPHA_NETWORK_ID, SecurityTestSeeder::ALPHA_TOKEN_ID)
         ->set('edit_name', 'Updated by Member')
         ->call('saveNetwork')
         ->assertHasNoErrors();
@@ -344,8 +341,7 @@ test('member cannot move networks to another team', function () {
     session()->forget('current_team');
 
     Livewire::test('pages::zerotier.network-edit-modal')
-        ->set('tokenId', SecurityTestSeeder::ALPHA_TOKEN_ID)
-        ->set('editing_network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)
+        ->call('open', SecurityTestSeeder::ALPHA_NETWORK_ID, SecurityTestSeeder::ALPHA_TOKEN_ID)
         ->set('move_to_team_id', SecurityTestSeeder::BETA_TEAM_ID)
         ->call('moveNetwork');
 
@@ -376,8 +372,7 @@ test('saveNetwork scopes DB update by team_id', function () {
     $originalName = $betaNetwork->name;
 
     Livewire::test('pages::zerotier.network-edit-modal')
-        ->set('tokenId', SecurityTestSeeder::ALPHA_TOKEN_ID)
-        ->set('editing_network_id', SecurityTestSeeder::BETA_NETWORK_ID)
+        ->call('open', SecurityTestSeeder::BETA_NETWORK_ID, SecurityTestSeeder::ALPHA_TOKEN_ID)
         ->set('edit_name', 'HACKED')
         ->call('saveNetwork');
 

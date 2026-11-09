@@ -3,18 +3,22 @@
 use App\Models\AuditLog;
 use App\Models\ZerotierMember;
 use App\Models\ZerotierNetwork;
-use App\Models\ZerotierToken;
 use App\Services\ZerotierService;
 use App\Services\ZerotierSyncService;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 
 new #[Title('Network Members')] class extends Component
 {
+    // Locked: these identify which network every action targets, so the
+    // client must never be able to swap them after the ownership check.
+    #[Locked]
     public string $networkId;
 
+    #[Locked]
     public string $tokenId;
 
     public array $network = [];
@@ -82,34 +86,45 @@ new #[Title('Network Members')] class extends Component
             return;
         }
 
-        // Verify the user's team owns this network
-        $ownsNetwork = ZerotierNetwork::where('network_id', $networkId)
-            ->where('team_id', auth()->user()->team->id)
-            ->exists();
-
-        if (! $ownsNetwork && ! auth()->user()->isAdmin()) {
-            abort(403);
-        }
-
         $this->networkId = $networkId;
         $this->tokenId = $tokenId;
+
+        // Verify the user's team owns this network on this controller
+        // (system admins may view any tracked network).
+        abort_unless($this->getDbNetwork(), 403);
+
         $this->loadNetwork();
         $this->loadMembers();
         AuditLog::record('member.list_viewed', 'network', $this->networkId);
     }
 
-    protected function getService(): ZerotierService
-    {
-        $token = ZerotierToken::findOrFail($this->tokenId);
-
-        return new ZerotierService($token);
-    }
-
+    /**
+     * The tracked network this page operates on, provided the current user may
+     * access it: owned by their current team, or any network for system admins.
+     */
     protected function getDbNetwork(): ?ZerotierNetwork
     {
-        return ZerotierNetwork::where('network_id', $this->networkId)
-            ->where('team_id', auth()->user()->team?->id)
-            ->first();
+        $query = ZerotierNetwork::where('network_id', $this->networkId)
+            ->where('zerotier_token_id', $this->tokenId);
+
+        if (! auth()->user()->isAdmin()) {
+            $query->where('team_id', auth()->user()->team?->id);
+        }
+
+        return $query->first();
+    }
+
+    /**
+     * Re-verify ownership on every mutation (team membership can change between
+     * requests) and build the API client from the network's own controller.
+     */
+    protected function getService(): ZerotierService
+    {
+        $network = $this->getDbNetwork();
+
+        abort_unless($network && $network->zerotierToken, 403);
+
+        return new ZerotierService($network->zerotierToken);
     }
 
     public function loadNetwork(): void
@@ -196,8 +211,10 @@ new #[Title('Network Members')] class extends Component
             return;
         }
 
+        $service = $this->getService();
+
         try {
-            $this->getService()->authorizeMember($this->networkId, $nodeId);
+            $service->authorizeMember($this->networkId, $nodeId);
             Flux::toast(variant: 'success', heading: 'Authorised', text: 'Member '.$nodeId.' has been authorised.');
             AuditLog::record('member.authorised', 'member', $nodeId, ['network_id' => $this->networkId]);
             $this->syncAndReload(force: true);
@@ -213,8 +230,10 @@ new #[Title('Network Members')] class extends Component
             return;
         }
 
+        $service = $this->getService();
+
         try {
-            $this->getService()->deauthorizeMember($this->networkId, $nodeId);
+            $service->deauthorizeMember($this->networkId, $nodeId);
             Flux::toast(variant: 'warning', heading: 'Deauthorised', text: 'Member '.$nodeId.' has been deauthorised.');
             AuditLog::record('member.deauthorised', 'member', $nodeId, ['network_id' => $this->networkId]);
             $this->syncAndReload(force: true);
@@ -240,8 +259,10 @@ new #[Title('Network Members')] class extends Component
             return;
         }
 
+        $service = $this->getService();
+
         try {
-            $this->getService()->deleteMember($this->networkId, $this->delete_member_id);
+            $service->deleteMember($this->networkId, $this->delete_member_id);
             Flux::modal('deleteMemberModal')->close();
             Flux::toast(variant: 'success', heading: 'Deleted', text: 'Member has been removed.');
             AuditLog::record('member.deleted', 'member', $this->delete_member_id, ['network_id' => $this->networkId]);
@@ -300,8 +321,10 @@ new #[Title('Network Members')] class extends Component
             return;
         }
 
+        $service = $this->getService();
+
         try {
-            $this->getService()->updateNetworkMember($this->networkId, $this->edit_member_id, [
+            $service->updateNetworkMember($this->networkId, $this->edit_member_id, [
                 'name' => $this->edit_member_name,
                 'ipAssignments' => $this->edit_ip_assignments,
                 'activeBridge' => $this->edit_active_bridge,

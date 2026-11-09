@@ -4,16 +4,20 @@ use App\Models\AuditLog;
 use App\Models\Team;
 use App\Models\TeamUser;
 use App\Models\ZerotierNetwork;
-use App\Models\ZerotierToken;
 use App\Services\ZerotierService;
 use Illuminate\Support\Facades\Cache;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
 new class extends Component
 {
+    // Locked: only open() may set these, after verifying the user can access
+    // the network. Every action re-resolves the network from them.
+    #[Locked]
     public string $editing_network_id = '';
 
+    #[Locked]
     public string $tokenId = '';
 
     public string $edit_tab = 'settings';
@@ -49,8 +53,15 @@ new class extends Component
             return;
         }
 
-        $token = ZerotierToken::findOrFail($tokenId);
-        $service = new ZerotierService($token);
+        $dbNetwork = $this->findAccessibleNetwork($networkId, $tokenId);
+
+        if (! $dbNetwork) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Network not found.');
+
+            return;
+        }
+
+        $service = new ZerotierService($dbNetwork->zerotierToken);
 
         try {
             $network = $service->getControllerNetwork($networkId);
@@ -70,7 +81,7 @@ new class extends Component
             $this->new_pool_end = '';
 
             $this->move_to_team_id = '';
-            $this->movable_teams = $this->loadMovableTeams();
+            $this->movable_teams = $this->loadMovableTeams($dbNetwork->team_id);
 
             Flux::modal('editNetworkModal')->show();
         } catch (Exception $e) {
@@ -81,7 +92,10 @@ new class extends Component
 
     public function addRoute(): void
     {
-        $this->validate(['new_route_target' => 'required|string|regex:/^[\d\.\/\:a-fA-F]+$/']);
+        $this->validate([
+            'new_route_target' => ['required', 'string', $this->cidrRule()],
+            'new_route_via' => 'nullable|ip',
+        ]);
 
         $this->edit_routes[] = [
             'target' => $this->new_route_target,
@@ -128,10 +142,38 @@ new class extends Component
             return;
         }
 
-        $this->validate(['edit_name' => 'required|string|max:255']);
+        $dbNetwork = $this->findAccessibleNetwork($this->editing_network_id, $this->tokenId);
 
-        $token = ZerotierToken::findOrFail($this->tokenId);
-        $service = new ZerotierService($token);
+        if (! $dbNetwork) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Network not found.');
+
+            return;
+        }
+
+        // Routes and pools are public properties, so they are validated here
+        // rather than trusting the add* helpers to have been the only writers.
+        $this->validate([
+            'edit_name' => 'required|string|max:255',
+            'edit_multicast_limit' => 'required|integer|min:0|max:1000000',
+            'edit_routes' => 'array|max:128',
+            'edit_routes.*.target' => ['required', 'string', $this->cidrRule()],
+            'edit_routes.*.via' => 'nullable|ip',
+            'edit_ip_pools' => 'array|max:128',
+            'edit_ip_pools.*.ipRangeStart' => 'required|ip',
+            'edit_ip_pools.*.ipRangeEnd' => 'required|ip',
+        ]);
+
+        $routes = array_map(fn ($r) => [
+            'target' => $r['target'],
+            'via' => ($r['via'] ?? null) ?: null,
+        ], array_values($this->edit_routes));
+
+        $pools = array_map(fn ($p) => [
+            'ipRangeStart' => $p['ipRangeStart'],
+            'ipRangeEnd' => $p['ipRangeEnd'],
+        ], array_values($this->edit_ip_pools));
+
+        $service = new ZerotierService($dbNetwork->zerotierToken);
 
         try {
             $service->updateNetwork($this->editing_network_id, [
@@ -139,23 +181,18 @@ new class extends Component
                 'private' => $this->edit_private,
                 'enableBroadcast' => $this->edit_broadcast,
                 'multicastLimit' => $this->edit_multicast_limit,
-                'routes' => $this->edit_routes,
-                'ipAssignmentPools' => $this->edit_ip_pools,
-                'v4AssignMode' => ['zt' => count($this->edit_ip_pools) > 0],
+                'routes' => $routes,
+                'ipAssignmentPools' => $pools,
+                'v4AssignMode' => ['zt' => count($pools) > 0],
             ]);
 
-            // Sync local DB record if tracked (scoped to current team)
-            ZerotierNetwork::where('network_id', $this->editing_network_id)
-                ->where('team_id', auth()->user()->team?->id)
-                ->update([
-                    'name' => $this->edit_name,
-                    'private' => $this->edit_private,
-                ]);
+            $dbNetwork->update([
+                'name' => $this->edit_name,
+                'private' => $this->edit_private,
+            ]);
 
-            // Bust the parent page's network list cache (whichever team it belongs to).
-            if ($teamId = $this->resolveNetworkTeamId()) {
-                Cache::forget("team_{$teamId}_networks_{$this->tokenId}");
-            }
+            // Bust the parent page's network list cache.
+            Cache::forget("team_{$dbNetwork->team_id}_networks_{$this->tokenId}");
 
             AuditLog::record('network.updated', 'network', $this->editing_network_id, ['name' => $this->edit_name]);
 
@@ -171,33 +208,66 @@ new class extends Component
 
     // ─── Move Network ────────────────────────────────────────────────
 
-    protected function loadMovableTeams(): array
+    /**
+     * Resolve a tracked network the current user may manage: one owned by their
+     * current team on the given controller, or any tracked network for system
+     * admins. Returns null otherwise, including for untracked network IDs.
+     */
+    protected function findAccessibleNetwork(string $networkId, string $tokenId): ?ZerotierNetwork
     {
-        $currentTeamId = auth()->user()->team?->id;
+        if ($networkId === '' || $tokenId === '') {
+            return null;
+        }
 
+        $query = ZerotierNetwork::with('zerotierToken')
+            ->where('network_id', $networkId)
+            ->where('zerotier_token_id', $tokenId);
+
+        if (! auth()->user()->isAdmin()) {
+            $query->where('team_id', auth()->user()->team?->id);
+        }
+
+        $network = $query->first();
+
+        return ($network && $network->zerotierToken) ? $network : null;
+    }
+
+    /** Validation rule: an IPv4/IPv6 CIDR such as 10.0.0.0/24 or fd00::/8. */
+    protected function cidrRule(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) {
+            $parts = explode('/', (string) $value);
+            $ip = $parts[0];
+            $bits = $parts[1] ?? null;
+            $isV4 = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false;
+            $isV6 = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false;
+            $max = $isV4 ? 32 : 128;
+
+            if (count($parts) !== 2 || (! $isV4 && ! $isV6) || ! ctype_digit((string) $bits) || (int) $bits > $max) {
+                $fail('The :attribute must be a valid CIDR (e.g. 10.0.0.0/24).');
+            }
+        };
+    }
+
+    protected function loadMovableTeams(?string $networkTeamId): array
+    {
         $query = Team::query()->orderBy('name');
 
-        if ($currentTeamId) {
-            $query->where('id', '!=', $currentTeamId);
+        if ($networkTeamId) {
+            $query->where('id', '!=', $networkTeamId);
         }
 
         if (! auth()->user()->isAdmin()) {
             $query->whereIn('id', TeamUser::query()
                 ->select('team_id')
                 ->where('user_id', auth()->id())
-                ->where('role', 'admin'));
+                ->where('role', 'admin')
+                ->active());
         }
 
         return $query->get(['id', 'name'])
             ->map(fn ($t) => ['id' => $t->id, 'name' => $t->name])
             ->toArray();
-    }
-
-    protected function resolveNetworkTeamId(): ?string
-    {
-        return ZerotierNetwork::where('network_id', $this->editing_network_id)
-            ->where('zerotier_token_id', $this->tokenId)
-            ->value('team_id');
     }
 
     public function confirmMoveNetwork(): void
@@ -227,13 +297,17 @@ new class extends Component
             return;
         }
 
-        $sourceTeamId = $this->resolveNetworkTeamId();
+        // Only a network the user can access (their current team's, or any
+        // for a system admin) can be moved out of its team.
+        $network = $this->findAccessibleNetwork($this->editing_network_id, $this->tokenId);
 
-        if (! $sourceTeamId) {
+        if (! $network) {
             Flux::toast(variant: 'danger', heading: 'Error', text: 'Network not found.');
 
             return;
         }
+
+        $sourceTeamId = $network->team_id;
 
         if ($this->move_to_team_id === $sourceTeamId) {
             Flux::toast(variant: 'warning', heading: 'No Change', text: 'This network is already on that team.');
@@ -242,34 +316,16 @@ new class extends Component
         }
 
         // Re-verify the user is admin of the destination team (system admin bypasses this).
-        if (! auth()->user()->isAdmin()) {
-            $isAdminOfDestination = TeamUser::where('user_id', auth()->id())
-                ->where('team_id', $this->move_to_team_id)
-                ->where('role', 'admin')
-                ->exists();
+        if (! auth()->user()->canAdministerTeam($this->move_to_team_id)) {
+            Flux::toast(variant: 'danger', heading: 'Permission Denied', text: 'You must be an admin of the destination team.');
 
-            if (! $isAdminOfDestination) {
-                Flux::toast(variant: 'danger', heading: 'Permission Denied', text: 'You must be an admin of the destination team.');
-
-                return;
-            }
+            return;
         }
 
         $destinationTeam = Team::find($this->move_to_team_id);
 
         if (! $destinationTeam) {
             Flux::toast(variant: 'danger', heading: 'Error', text: 'Destination team not found.');
-
-            return;
-        }
-
-        $network = ZerotierNetwork::where('network_id', $this->editing_network_id)
-            ->where('team_id', $sourceTeamId)
-            ->where('zerotier_token_id', $this->tokenId)
-            ->first();
-
-        if (! $network) {
-            Flux::toast(variant: 'danger', heading: 'Error', text: 'Network not found.');
 
             return;
         }

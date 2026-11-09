@@ -294,11 +294,22 @@ new #[Title('ZeroTier Networks')] class extends Component
             return;
         }
 
+        // Guard against deleting a network some team is tracking: this action
+        // is only for orphans the import list surfaced.
+        if (ZerotierNetwork::where('network_id', $this->delete_untracked_id)->where('zerotier_token_id', $this->selectedToken)->exists()) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'That network is assigned to a team. Delete it from the team instead.');
+
+            return;
+        }
+
         $token = ZerotierToken::findOrFail($this->selectedToken);
         $service = new ZerotierService($token);
 
         try {
-            $service->deleteNetwork($this->delete_untracked_id);
+            if (! $service->deleteNetwork($this->delete_untracked_id)) {
+                throw new RuntimeException("Controller refused to delete network {$this->delete_untracked_id}");
+            }
+
             Flux::modal('deleteUntrackedModal')->close();
             Flux::toast(variant: 'success', heading: 'Deleted', text: 'Untracked network has been removed from the controller.');
 
@@ -392,9 +403,28 @@ new #[Title('ZeroTier Networks')] class extends Component
 
     // ─── Delete Network ──────────────────────────────────────────────
 
+    /**
+     * A network on the selected controller owned by the user's current team.
+     */
+    protected function ownedNetwork(string $networkId): ?ZerotierNetwork
+    {
+        $team = auth()->user()->team;
+
+        if (! $team || $networkId === '' || $this->selectedToken === '') {
+            return null;
+        }
+
+        return ZerotierNetwork::with('zerotierToken')
+            ->where('network_id', $networkId)
+            ->where('zerotier_token_id', $this->selectedToken)
+            ->where('team_id', $team->id)
+            ->whereHas('zerotierToken')
+            ->first();
+    }
+
     public function confirmDeleteNetwork(string $networkId, string $networkName): void
     {
-        if (! auth()->user()->canManageNetworks()) {
+        if (! auth()->user()->canManageNetworks() || ! $this->ownedNetwork($networkId)) {
             return;
         }
 
@@ -409,14 +439,25 @@ new #[Title('ZeroTier Networks')] class extends Component
             return;
         }
 
-        $token = ZerotierToken::findOrFail($this->selectedToken);
-        $service = new ZerotierService($token);
+        // Verify ownership BEFORE touching the controller: the delete is
+        // irreversible and delete_network_id is client-supplied.
+        $dbNetwork = $this->ownedNetwork($this->delete_network_id);
+
+        if (! $dbNetwork) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Network not found.');
+
+            return;
+        }
+
+        $service = new ZerotierService($dbNetwork->zerotierToken);
 
         try {
-            $service->deleteNetwork($this->delete_network_id);
-            ZerotierNetwork::where('network_id', $this->delete_network_id)
-                ->where('team_id', auth()->user()->team->id)
-                ->delete();
+            if (! $service->deleteNetwork($dbNetwork->network_id)) {
+                throw new RuntimeException("Controller refused to delete network {$dbNetwork->network_id}");
+            }
+
+            $dbNetwork->members()->delete();
+            $dbNetwork->delete();
             Flux::modal('deleteNetworkModal')->close();
             Flux::toast(variant: 'success', heading: 'Deleted', text: 'Network has been deleted.');
             AuditLog::record('network.deleted', 'network', $this->delete_network_id, ['name' => $this->delete_network_name]);

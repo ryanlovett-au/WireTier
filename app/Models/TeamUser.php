@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -38,6 +39,15 @@ class TeamUser extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Memberships that have not expired (no expiry, or expiring today or later).
+     * Mirrors getExpiredAttribute() at the query level.
+     */
+    public function scopeActive(Builder $query): void
+    {
+        $query->where(fn ($q) => $q->whereNull('expires')->orWhere('expires', '>=', now()->format('Y-m-d')));
     }
 
     public function getExpiredAttribute(): bool

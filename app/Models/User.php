@@ -110,9 +110,43 @@ class User extends Authenticatable implements MustVerifyEmail
         return TeamUser::where('user_id', $this->id)->where('team_id', $teamId)->exists();
     }
 
+    /**
+     * Per-instance memo for isAdmin(), which is called many times per request.
+     * Not persisted; a fresh request (or fresh()) re-checks the database.
+     */
+    protected ?bool $isAdminMemo = null;
+
+    /**
+     * System admin: the admin team is selected AND the user still holds an
+     * unexpired membership of it. Checking current_team alone would let a
+     * removed or expired admin keep system-wide access indefinitely.
+     */
     public function isAdmin(): bool
     {
-        return $this->current_team === config('wiretier.admin_team');
+        $adminTeam = config('wiretier.admin_team');
+
+        if (empty($adminTeam) || $this->current_team !== $adminTeam) {
+            return false;
+        }
+
+        return $this->isAdminMemo ??= TeamUser::where('team_id', $adminTeam)
+            ->where('user_id', $this->id)
+            ->active()
+            ->exists();
+    }
+
+    /**
+     * Whether the user may administer the given team: system admins, or an
+     * unexpired 'admin' membership of THAT team. Use this (not isTeamAdmin(),
+     * which reflects the current team) whenever acting on a specific team.
+     */
+    public function canAdministerTeam(string $teamId): bool
+    {
+        return $this->isAdmin() || TeamUser::where('team_id', $teamId)
+            ->where('user_id', $this->id)
+            ->where('role', 'admin')
+            ->active()
+            ->exists();
     }
 
     public function isTeamAdmin(): bool
