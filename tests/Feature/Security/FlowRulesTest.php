@@ -4,6 +4,7 @@ use App\Models\AuditLog;
 use App\Models\User;
 use App\Models\ZerotierMember;
 use App\Models\ZerotierNetwork;
+use App\Services\FlowRules\FlowRuleDecompiler;
 use App\Services\FlowRules\FlowRulesService;
 use App\Services\FlowRules\RulesFingerprint;
 use App\Services\ZerotierSyncService;
@@ -184,13 +185,79 @@ test('rules changed outside WireTier are detected after a sync', function () {
         ->assertSee('changed outside WireTier');
 });
 
-test('rules set by another tool are shown as unmanaged', function () {
+test('rules set by another tool open as a script rebuilt from them', function () {
     $this->controller['rules'] = [['type' => 'MATCH_ETHERTYPE', 'not' => true, 'or' => false, 'etherType' => 2048], ['type' => 'ACTION_DROP'], ['type' => 'ACTION_ACCEPT']];
 
     openRulesEditor($this->alphaAdmin)
         ->assertSet('rules_state', 'unmanaged')
+        ->assertSet('rules_from_live', true)
+        ->assertSet('rules_error', null)
+        ->assertSee('set by another tool')
+        ->assertSee('rebuilt the script below')
+        ->assertSet('rules_source', fn ($src) => str_contains($src, 'not ethertype ipv4'));
+});
+
+test('saving a rebuilt script adopts the live rules without changing them', function () {
+    $this->controller['rules'] = [['type' => 'MATCH_IP_DEST_PORT_RANGE', 'not' => false, 'or' => false, 'start' => 22, 'end' => 22], ['type' => 'ACTION_DROP'], ['type' => 'ACTION_ACCEPT']];
+    $this->controller['capabilities'] = [['id' => 5, 'default' => false, 'rules' => [['type' => 'ACTION_ACCEPT']]]];
+    $this->controller['tags'] = [['id' => 9, 'default' => 3]];
+    $before = FlowRuleDecompiler::canonical($this->controller);
+
+    openRulesEditor($this->alphaAdmin)
+        ->call('saveRules')
+        ->assertSet('rules_state', 'managed')
+        ->assertSet('rules_from_live', false);
+
+    expect(FlowRuleDecompiler::canonical($this->controller))->toBe($before);
+    expect($this->network->fresh()->rules_meta['capabilities'])->toHaveKey('cap_5');
+});
+
+test('live rules the language cannot express leave the editor empty and say why', function () {
+    $this->controller['rules'] = [['type' => 'ACTION_PRIORITY', 'qosBucket' => 2], ['type' => 'ACTION_ACCEPT']];
+
+    openRulesEditor($this->alphaAdmin)
+        ->assertSet('rules_state', 'unmanaged')
         ->assertSet('rules_source', '')
-        ->assertSee('set by another tool');
+        ->assertSet('rules_from_live', false)
+        ->assertSee('Saving a script here will replace them')
+        ->assertSee('ACTION_PRIORITY');
+});
+
+test('drifted rules can be loaded into the editor with their saved names', function () {
+    app(FlowRulesService::class)->apply($this->network->fresh(), SSH_RULES);
+    // Someone changes the tag rule on the controller.
+    $this->controller['rules'][0]['value'] = 1;
+    ZerotierSyncService::syncNetwork($this->network->fresh(), force: true);
+
+    openRulesEditor($this->alphaAdmin)
+        ->assertSet('rules_state', 'drifted')
+        ->assertSet('rules_source', SSH_RULES)
+        ->assertSee('Load live rules')
+        ->call('confirmLoadLiveRules')
+        ->assertSet('rules_from_live', true)
+        ->assertSet('rules_source', fn ($src) => str_contains($src, 'tdiff dept eng') && str_contains($src, 'cap ssh'));
+});
+
+test('loading live rules over unsaved edits asks first in a Flux modal', function () {
+    app(FlowRulesService::class)->apply($this->network->fresh(), SSH_RULES);
+    $this->controller['rules'] = [['type' => 'ACTION_DROP']];
+    ZerotierSyncService::syncNetwork($this->network->fresh(), force: true);
+
+    openRulesEditor($this->alphaAdmin)
+        ->set('rules_source', "# my edits\naccept;")
+        ->call('confirmLoadLiveRules')
+        ->assertDispatched('modal-show', name: 'loadLiveConfirm')
+        ->assertSet('rules_source', "# my edits\naccept;")
+        ->call('loadLiveRules')
+        ->assertSet('rules_from_live', true);
+});
+
+test('a team member who is not an admin cannot load live rules', function () {
+    $this->controller['rules'] = [['type' => 'ACTION_DROP']];
+
+    openRulesEditor($this->alphaMember)
+        ->call('loadLiveRules')
+        ->assertSet('rules_source', '');
 });
 
 // ─── Members ─────────────────────────────────────────────────────────────

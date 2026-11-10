@@ -37,7 +37,7 @@ final class FlowRuleCompiler
     private const MAX_MACRO_DEPTH = 32;
 
     // Names for bits in characteristics -- 0==LSB, 63==MSB
-    private const CHARACTERISTIC_BITS = [
+    public const CHARACTERISTIC_BITS = [
         'inbound' => 63,
         'multicast' => 62,
         'broadcast' => 61,
@@ -58,7 +58,7 @@ final class FlowRuleCompiler
     ];
 
     // Shorthand names for common ethernet types
-    private const ETHERTYPES = [
+    public const ETHERTYPES = [
         'ipv4' => 0x0800,
         'arp' => 0x0806,
         'wol' => 0x0842,
@@ -98,7 +98,7 @@ final class FlowRuleCompiler
     ];
 
     // Reserved words that can't be used as tag, capability, or rule set names
-    private const RESERVED_WORDS = [
+    public const RESERVED_WORDS = [
         'macro' => true, 'tag' => true, 'cap' => true, 'default' => true,
         'drop' => true, 'accept' => true, 'tee' => true, 'watch' => true, 'redirect' => true,
         'break' => true, 'priority' => true,

@@ -6,6 +6,8 @@ use App\Models\TeamUser;
 use App\Models\ZerotierNetwork;
 use App\Services\FlowRules\FlowRuleCompileException;
 use App\Services\FlowRules\FlowRuleCompiler;
+use App\Services\FlowRules\FlowRuleDecompileException;
+use App\Services\FlowRules\FlowRuleDecompiler;
 use App\Services\FlowRules\FlowRulesService;
 use App\Services\ZerotierService;
 use Illuminate\Support\Facades\Cache;
@@ -74,6 +76,14 @@ new class extends Component
 
     #[Locked]
     public string $rules_updated_label = '';
+
+    /** The editor holds a script WireTier rebuilt from the live rules. */
+    #[Locked]
+    public bool $rules_from_live = false;
+
+    /** Why the live rules could not be rebuilt into a script, if they couldn't. */
+    #[Locked]
+    public string $rules_adopt_error = '';
 
     #[On('open-network-edit')]
     public function open(string $networkId, string $tokenId): void
@@ -248,6 +258,8 @@ new class extends Component
         $this->live_rules_json = '';
         $this->rules_updated_label = '';
         $this->rules_state = 'default';
+        $this->rules_from_live = false;
+        $this->rules_adopt_error = '';
 
         if (! auth()->user()->isTeamAdmin()) {
             return;
@@ -264,8 +276,89 @@ new class extends Component
                 'capabilities' => $liveConfig['capabilities'] ?? [],
                 'tags' => $liveConfig['tags'] ?? [],
             ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+
+            $live = $this->rebuildLiveScript($dbNetwork, $liveConfig);
+
+            // Without a saved script, start from the rebuilt one so saving
+            // adopts the live rules instead of replacing them. A drifted
+            // network keeps its saved script and offers the rebuilt one.
+            if ($live !== null && $this->rules_state === 'unmanaged') {
+                $this->rules_source = $live;
+                $this->rules_from_live = true;
+            }
         }
 
+        $this->compileRules();
+    }
+
+    /** The live rules as a script, or null (with rules_adopt_error set) when they can't be expressed. */
+    protected function rebuildLiveScript(ZerotierNetwork $dbNetwork, array $liveConfig): ?string
+    {
+        $this->rules_adopt_error = '';
+
+        try {
+            return FlowRuleDecompiler::decompile($liveConfig, $dbNetwork->rules_meta ?? []);
+        } catch (FlowRuleDecompileException $e) {
+            $this->rules_adopt_error = $e->getMessage();
+
+            return null;
+        }
+    }
+
+    public function confirmLoadLiveRules(): void
+    {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
+        $dbNetwork = $this->findAccessibleNetwork($this->editing_network_id, $this->tokenId);
+
+        // Nothing to lose when the editor still holds the saved script.
+        if ($dbNetwork && ($this->rules_source === (string) $dbNetwork->rules_source || trim($this->rules_source) === '')) {
+            $this->loadLiveRules();
+
+            return;
+        }
+
+        Flux::modal('loadLiveConfirm')->show();
+    }
+
+    /** Replace the editor contents with a script rebuilt from the controller's current rules. */
+    public function loadLiveRules(): void
+    {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
+        Flux::modal('loadLiveConfirm')->close();
+
+        $dbNetwork = $this->findAccessibleNetwork($this->editing_network_id, $this->tokenId);
+
+        if (! $dbNetwork) {
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Network not found.');
+
+            return;
+        }
+
+        try {
+            $liveConfig = (new ZerotierService($dbNetwork->zerotierToken))->getControllerNetwork($dbNetwork->network_id);
+        } catch (Exception $e) {
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'Could not read the live rules from the controller.');
+
+            return;
+        }
+
+        $live = $this->rebuildLiveScript($dbNetwork, $liveConfig);
+
+        if ($live === null) {
+            Flux::toast(variant: 'danger', heading: 'Cannot Rebuild Rules', text: $this->rules_adopt_error);
+
+            return;
+        }
+
+        $this->rules_source = $live;
+        $this->rules_from_live = true;
         $this->compileRules();
     }
 
@@ -329,6 +422,7 @@ new class extends Component
         }
 
         $this->rules_source = FlowRulesService::EXAMPLE_SOURCE;
+        $this->rules_from_live = false;
         $this->compileRules();
 
         Flux::modal('loadExampleConfirm')->close();
@@ -394,6 +488,8 @@ new class extends Component
 
         $this->rules_state = 'managed';
         $this->live_rules_json = '';
+        $this->rules_from_live = false;
+        $this->rules_adopt_error = '';
         $this->rules_updated_label = $dbNetwork->rules_updated_at?->diffForHumans() ?? '';
 
         Flux::toast(variant: 'success', heading: 'Rules Applied', text: 'Flow rules are now active on the network.');
@@ -669,10 +765,21 @@ new class extends Component
                     <div class="flex items-start gap-2 px-3 py-2.5 rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 text-sm">
                         <flux:icon name="exclamation-triangle" class="size-4 text-amber-500 shrink-0 mt-0.5" />
                         <div class="text-amber-900 dark:text-amber-200 min-w-0 flex-1">
-                            @if ($rules_state === 'drifted')
+                            @if ($rules_state === 'drifted' && $rules_from_live)
+                                The live rules were changed outside WireTier. The script below was rebuilt from them; saving it brings them back under WireTier without changing how traffic is handled.
+                            @elseif ($rules_state === 'drifted')
                                 The live rules were changed outside WireTier after they were last saved here. The script below is the last version saved in WireTier; saving it will replace the live rules.
+                            @elseif ($rules_from_live)
+                                This network has flow rules set by another tool. WireTier rebuilt the script below from them; saving it adopts them without changing how traffic is handled.
                             @else
                                 This network has flow rules set by another tool, and WireTier doesn't have their source script. Saving a script here will replace them.
+                            @endif
+                            @if ($rules_adopt_error)
+                                <p class="mt-1 text-xs">WireTier can't rebuild a script from the live rules: {{ $rules_adopt_error }}</p>
+                            @elseif ($rules_state === 'drifted' && ! $rules_from_live)
+                                <div class="mt-2">
+                                    <flux:button size="xs" icon="arrow-down-tray" wire:click="confirmLoadLiveRules">Load live rules</flux:button>
+                                </div>
                             @endif
                             <details class="mt-2">
                                 <summary class="cursor-pointer text-xs font-medium">View live compiled rules</summary>
@@ -825,6 +932,24 @@ new class extends Component
     </flux:modal>
 
     {{-- Load Example Rules Confirm Modal --}}
+    <flux:modal name="loadLiveConfirm" focusable class="max-w-sm">
+        <div class="w-14 h-14 rounded-full bg-zinc-100 dark:bg-zinc-800 p-4 mt-4 mb-4 mx-auto flex items-center justify-center">
+            <flux:icon name="arrow-down-tray" class="size-6 text-zinc-600 dark:text-zinc-300" />
+        </div>
+
+        <flux:heading size="lg" class="text-center">Load Live Rules?</flux:heading>
+        <flux:subheading class="text-center mt-2 mb-6">
+            This replaces the script in the editor with one rebuilt from the rules live on the controller. Your unsaved edits will be lost. Nothing is applied until you save.
+        </flux:subheading>
+
+        <div class="flex justify-end gap-2">
+            <flux:modal.close>
+                <flux:button variant="filled">Cancel</flux:button>
+            </flux:modal.close>
+            <flux:button variant="primary" wire:click="loadLiveRules">Replace Script</flux:button>
+        </div>
+    </flux:modal>
+
     <flux:modal name="loadExampleConfirm" focusable class="max-w-sm">
         <div class="w-14 h-14 rounded-full bg-zinc-100 dark:bg-zinc-800 p-4 mt-4 mb-4 mx-auto flex items-center justify-center">
             <flux:icon name="document-text" class="size-6 text-zinc-600 dark:text-zinc-300" />
