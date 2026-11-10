@@ -38,6 +38,16 @@ new class extends Component
 
     public int $edit_multicast_limit = 32;
 
+    public int $edit_mtu = 2800;
+
+    /** Search domain pushed to members with DNS enabled ('' = none). */
+    public string $edit_dns_domain = '';
+
+    /** DNS server IPs pushed with the domain (ZeroTier allows up to 4). */
+    public array $edit_dns_servers = [];
+
+    public string $new_dns_server = '';
+
     public array $edit_routes = [];
 
     public array $edit_ip_pools = [];
@@ -122,6 +132,10 @@ new class extends Component
             $this->edit_private = $network['private'] ?? true;
             $this->edit_broadcast = $network['enableBroadcast'] ?? true;
             $this->edit_multicast_limit = $network['multicastLimit'] ?? 32;
+            $this->edit_mtu = (int) ($network['mtu'] ?? 2800);
+            $this->edit_dns_domain = (string) ($network['dns']['domain'] ?? '');
+            $this->edit_dns_servers = array_values(array_filter((array) ($network['dns']['servers'] ?? []), 'is_string'));
+            $this->new_dns_server = '';
             $this->edit_routes = array_values($network['routes'] ?? []);
             $this->edit_ip_pools = array_values($network['ipAssignmentPools'] ?? []);
             $this->new_route_target = '';
@@ -187,6 +201,29 @@ new class extends Component
         $this->edit_ip_pools = array_values($this->edit_ip_pools);
     }
 
+    public function addDnsServer(): void
+    {
+        $this->validate(['new_dns_server' => 'required|ip'], [], ['new_dns_server' => 'DNS server']);
+
+        if (count($this->edit_dns_servers) >= 4) {
+            $this->addError('new_dns_server', 'ZeroTier allows up to 4 DNS servers.');
+
+            return;
+        }
+
+        if (! in_array($this->new_dns_server, $this->edit_dns_servers, true)) {
+            $this->edit_dns_servers[] = $this->new_dns_server;
+        }
+
+        $this->new_dns_server = '';
+    }
+
+    public function removeDnsServer(int $index): void
+    {
+        array_splice($this->edit_dns_servers, $index, 1);
+        $this->edit_dns_servers = array_values($this->edit_dns_servers);
+    }
+
     public function saveNetwork(): void
     {
         if (! auth()->user()->canManageNetworks()) {
@@ -201,17 +238,33 @@ new class extends Component
             return;
         }
 
-        // Routes and pools are public properties, so they are validated here
-        // rather than trusting the add* helpers to have been the only writers.
+        $this->edit_dns_domain = strtolower(trim($this->edit_dns_domain));
+
+        // Routes, pools and DNS servers are public properties, so they are
+        // validated here rather than trusting the add* helpers to have been
+        // the only writers.
         $this->validate([
             'edit_name' => 'required|string|max:255',
             'edit_multicast_limit' => 'required|integer|min:0|max:1000000',
+            'edit_mtu' => 'required|integer|min:1280|max:10000',
+            'edit_dns_domain' => ['nullable', 'string', 'max:127', 'regex:/^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/', 'required_with:edit_dns_servers'],
+            'edit_dns_servers' => 'array|max:4|required_with:edit_dns_domain',
+            'edit_dns_servers.*' => 'required|ip|distinct',
             'edit_routes' => 'array|max:128',
             'edit_routes.*.target' => ['required', 'string', $this->cidrRule()],
             'edit_routes.*.via' => 'nullable|ip',
             'edit_ip_pools' => 'array|max:128',
             'edit_ip_pools.*.ipRangeStart' => 'required|ip',
             'edit_ip_pools.*.ipRangeEnd' => 'required|ip',
+        ], [
+            'edit_dns_domain.regex' => 'Enter a domain name such as zt.example.com.',
+            'edit_dns_domain.required_with' => 'Add a search domain to go with the DNS servers.',
+            'edit_dns_servers.required_with' => 'Add at least one DNS server for the search domain.',
+        ], [
+            'edit_mtu' => 'MTU',
+            'edit_dns_domain' => 'search domain',
+            'edit_dns_servers' => 'DNS servers',
+            'edit_dns_servers.*' => 'DNS server',
         ]);
 
         $routes = array_map(fn ($r) => [
@@ -232,6 +285,9 @@ new class extends Component
                 'private' => $this->edit_private,
                 'enableBroadcast' => $this->edit_broadcast,
                 'multicastLimit' => $this->edit_multicast_limit,
+                'mtu' => $this->edit_mtu,
+                // An empty domain and server list clears DNS on the members.
+                'dns' => ['domain' => $this->edit_dns_domain, 'servers' => array_values($this->edit_dns_servers)],
                 'routes' => $routes,
                 'ipAssignmentPools' => $pools,
                 'v4AssignMode' => ['zt' => count($pools) > 0],
@@ -769,6 +825,7 @@ new class extends Component
             <flux:tab name="settings">Settings</flux:tab>
             <flux:tab name="ip_ranges">IP Ranges</flux:tab>
             <flux:tab name="routes">Managed Routes</flux:tab>
+            <flux:tab name="dns">DNS</flux:tab>
             @if (auth()->user()->isTeamAdmin())
                 <flux:tab name="rules">Flow Rules</flux:tab>
                 <flux:tab name="move">Move Team</flux:tab>
@@ -787,6 +844,46 @@ new class extends Component
                 <flux:description class="mb-2">Maximum recipients for a multicast/broadcast packet (0 = disabled)</flux:description>
                 <flux:input wire:model="edit_multicast_limit" type="number" min="0" max="1000" style="width:120px;" />
             </div>
+            <div>
+                <flux:label>MTU</flux:label>
+                <flux:description class="mb-2">Largest packet the network's virtual interface carries, 1280 to 10000 bytes (ZeroTier default 2800)</flux:description>
+                <flux:input wire:model="edit_mtu" type="number" min="1280" max="10000" style="width:120px;" />
+            </div>
+        </div>
+
+        {{-- DNS Panel --}}
+        <div x-show="$wire.edit_tab === 'dns'" class="space-y-5 min-h-[220px]">
+            <flux:input wire:model="edit_dns_domain" label="Search Domain" placeholder="e.g. zt.example.com" description="Names under this domain are looked up using the servers below, e.g. laptop.zt.example.com." />
+
+            <div>
+                <flux:label>DNS Servers</flux:label>
+                @if (count($edit_dns_servers) > 0)
+                    <div class="space-y-2 mt-2">
+                        @foreach ($edit_dns_servers as $i => $server)
+                            <div wire:key="dns-{{ $i }}" class="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+                                <flux:icon name="server" class="size-4 text-zinc-400 shrink-0" />
+                                <span class="font-mono text-sm flex-1">{{ $server }}</span>
+                                <flux:button size="xs" icon="x-mark" variant="ghost" wire:click="removeDnsServer({{ (int) $i }})" />
+                            </div>
+                        @endforeach
+                    </div>
+                @else
+                    <p class="text-sm text-zinc-400 italic mt-2">No DNS servers. Members keep their own DNS settings.</p>
+                @endif
+                <flux:error name="edit_dns_servers" />
+                <flux:error name="edit_dns_servers.*" />
+            </div>
+
+            @if (count($edit_dns_servers) < 4)
+                <div class="flex items-end gap-3">
+                    <flux:input wire:model="new_dns_server" label="Add Server" placeholder="e.g. 10.147.17.1" class="flex-1" />
+                    <flux:button size="sm" icon="plus" wire:click="addDnsServer" class="mb-0.5">Add</flux:button>
+                </div>
+            @endif
+
+            <flux:callout icon="information-circle" variant="secondary">
+                <flux:callout.text>Devices only apply these settings when DNS is allowed for this network on the device: "Allow DNS Configuration" in the ZeroTier app, or zerotier-cli set {{ $editing_network_id }} allowDNS=1.</flux:callout.text>
+            </flux:callout>
         </div>
 
         {{-- IP Ranges Panel --}}

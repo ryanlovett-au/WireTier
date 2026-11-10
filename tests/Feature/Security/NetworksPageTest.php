@@ -4,6 +4,7 @@ use App\Models\User;
 use App\Models\ZerotierNetwork;
 use Database\Seeders\SecurityTestSeeder;
 use Illuminate\Support\Facades\Http;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 
 function defaultHttpFakes(): void
@@ -550,3 +551,101 @@ test('createNetwork normalises the subnet to its network address', function () {
     expect($create[0]->data()['routes'])->toBe([['target' => '10.42.7.0/24']]);
     expect($create[0]->data()['ipAssignmentPools'])->toBe([['ipRangeStart' => '10.42.7.1', 'ipRangeEnd' => '10.42.7.254']]);
 });
+
+// ─── DNS and MTU ─────────────────────────────────────────────────────────
+
+function sentNetworkUpdate(): ?array
+{
+    $sent = Http::recorded(fn ($request) => $request->method() === 'POST' && str_contains($request->url(), '/controller/network/'.SecurityTestSeeder::ALPHA_NETWORK_ID));
+
+    return $sent->isEmpty() ? null : $sent->last()[0]->data();
+}
+
+function openAlphaNetworkSettings(): Testable
+{
+    return Livewire::test('pages::zerotier.network-edit-modal')
+        ->call('open', SecurityTestSeeder::ALPHA_NETWORK_ID, SecurityTestSeeder::ALPHA_TOKEN_ID);
+}
+
+test('DNS and MTU load from the controller and default when unset', function () {
+    defaultHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    openAlphaNetworkSettings()
+        ->assertSet('edit_mtu', 2800)
+        ->assertSet('edit_dns_domain', '')
+        ->assertSet('edit_dns_servers', []);
+});
+
+test('DNS servers, search domain and MTU are sent to the controller', function () {
+    defaultHttpFakes();
+    $this->actingAs($this->alphaMember);
+    session()->forget('current_team');
+
+    openAlphaNetworkSettings()
+        ->set('edit_dns_domain', ' ZT.Example.com ')
+        ->set('new_dns_server', '10.0.0.53')->call('addDnsServer')
+        ->set('new_dns_server', 'fd00::53')->call('addDnsServer')
+        ->set('new_dns_server', '10.0.0.53')->call('addDnsServer')
+        ->assertSet('edit_dns_servers', ['10.0.0.53', 'fd00::53'])
+        ->set('edit_mtu', 1400)
+        ->call('saveNetwork')
+        ->assertHasNoErrors();
+
+    expect(sentNetworkUpdate())
+        ->dns->toBe(['domain' => 'zt.example.com', 'servers' => ['10.0.0.53', 'fd00::53']])
+        ->mtu->toBe(1400);
+});
+
+test('removing the domain and servers clears DNS on the controller', function () {
+    defaultHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    openAlphaNetworkSettings()
+        ->set('edit_dns_domain', 'zt.example.com')
+        ->set('edit_dns_servers', ['10.0.0.53'])
+        ->call('removeDnsServer', 0)
+        ->set('edit_dns_domain', '')
+        ->call('saveNetwork')
+        ->assertHasNoErrors();
+
+    expect(sentNetworkUpdate()['dns'])->toBe(['domain' => '', 'servers' => []]);
+});
+
+test('at most four DNS servers can be added', function () {
+    defaultHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    openAlphaNetworkSettings()
+        ->set('edit_dns_servers', ['10.0.0.1', '10.0.0.2', '10.0.0.3', '10.0.0.4'])
+        ->set('new_dns_server', '10.0.0.5')
+        ->call('addDnsServer')
+        ->assertHasErrors('new_dns_server')
+        ->assertSet('edit_dns_servers', ['10.0.0.1', '10.0.0.2', '10.0.0.3', '10.0.0.4']);
+});
+
+test('invalid DNS and MTU settings are rejected before reaching the controller', function (array $set, string $field) {
+    defaultHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    $page = openAlphaNetworkSettings();
+    foreach ($set as $property => $value) {
+        $page->set($property, $value);
+    }
+    $page->call('saveNetwork')->assertHasErrors($field);
+
+    expect(sentNetworkUpdate())->toBeNull();
+})->with([
+    'MTU too small' => [['edit_mtu' => 1000], 'edit_mtu'],
+    'MTU too large' => [['edit_mtu' => 20000], 'edit_mtu'],
+    'domain with spaces' => [['edit_dns_domain' => 'my domain', 'edit_dns_servers' => ['10.0.0.53']], 'edit_dns_domain'],
+    'domain with a scheme' => [['edit_dns_domain' => 'https://zt.example.com', 'edit_dns_servers' => ['10.0.0.53']], 'edit_dns_domain'],
+    'domain without servers' => [['edit_dns_domain' => 'zt.example.com'], 'edit_dns_servers'],
+    'servers without a domain' => [['edit_dns_servers' => ['10.0.0.53']], 'edit_dns_domain'],
+    'server not an IP' => [['edit_dns_domain' => 'zt.example.com', 'edit_dns_servers' => ['dns.example.com']], 'edit_dns_servers.0'],
+    'five servers' => [['edit_dns_domain' => 'zt.example.com', 'edit_dns_servers' => ['10.0.0.1', '10.0.0.2', '10.0.0.3', '10.0.0.4', '10.0.0.5']], 'edit_dns_servers'],
+]);

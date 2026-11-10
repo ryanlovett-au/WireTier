@@ -1,11 +1,13 @@
 <?php
 
+use App\Models\AuditLog;
 use App\Models\User;
 use App\Models\ZerotierMember;
 use App\Models\ZerotierNetwork;
 use App\Services\ZerotierSyncService;
 use Database\Seeders\SecurityTestSeeder;
 use Illuminate\Support\Facades\Http;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 
 function membersHttpFakes(?object $tracker = null): void
@@ -399,4 +401,117 @@ test('addIpAssignment only accepts IP addresses', function () {
         ->call('addIpAssignment')
         ->assertHasNoErrors()
         ->assertSet('edit_ip_assignments', ['10.0.0.9']);
+});
+
+// ─── Add (pre-authorise) member ──────────────────────────────────────────
+
+/** A controller whose member list grows as members are posted; returns the posted payloads. */
+function preauthControllerFake(): ArrayObject
+{
+    $members = new ArrayObject(['aabb000001' => ['address' => 'aabb000001', 'authorized' => true, 'ipAssignments' => ['10.0.0.2'], 'name' => 'test-node']]);
+    $posts = new ArrayObject;
+
+    Http::fake(function ($request) use ($members, $posts) {
+        $url = $request->url();
+
+        if ($request->method() === 'POST' && preg_match('#/member/([a-f0-9]+)$#', $url, $m)) {
+            $posts[$m[1]] = $request->data();
+            $members[$m[1]] = array_merge(['address' => $m[1], 'authorized' => false, 'ipAssignments' => [], 'name' => ''], $members[$m[1]] ?? [], $request->data());
+
+            return Http::response($members[$m[1]]);
+        }
+        if (preg_match('#/member/([a-f0-9]+)$#', $url, $m)) {
+            return Http::response($members[$m[1]] ?? [], isset($members[$m[1]]) ? 200 : 404);
+        }
+        if (str_contains($url, '/member')) {
+            return Http::response(array_fill_keys(array_keys($members->getArrayCopy()), 1));
+        }
+        if (str_contains($url, '/controller/network/')) {
+            return Http::response(['nwid' => SecurityTestSeeder::ALPHA_NETWORK_ID, 'name' => 'Alpha Net', 'private' => true]);
+        }
+
+        return Http::response([]);
+    });
+
+    return $posts;
+}
+
+function alphaMembersPage(): Testable
+{
+    return Livewire::test('pages::zerotier.members', [
+        'networkId' => SecurityTestSeeder::ALPHA_NETWORK_ID,
+        'tokenId' => SecurityTestSeeder::ALPHA_TOKEN_ID,
+    ]);
+}
+
+test('a member can be authorised by node ID before the device joins', function () {
+    $posts = preauthControllerFake();
+    $this->actingAs($this->alphaMember);
+
+    $page = alphaMembersPage()
+        ->call('addMemberModal')
+        ->set('add_member_id', ' A1B2C3D4E5 ')
+        ->set('add_member_name', 'Field laptop')
+        ->set('add_member_description', 'Issued to the night shift')
+        ->set('add_member_ip', '10.0.0.50')
+        ->call('addMember')
+        ->assertHasNoErrors()
+        ->assertSet('add_member_id', '');
+
+    expect($posts['a1b2c3d4e5'])->toBe(['authorized' => true, 'name' => 'Field laptop', 'ipAssignments' => ['10.0.0.50']]);
+
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+    $member = ZerotierMember::where('zerotier_network_id', $network->id)->where('node_id', 'a1b2c3d4e5')->first();
+    expect($member->authorised)->toBeTrue();
+    expect($member->description)->toBe('Issued to the night shift');
+    expect(collect($page->get('members'))->pluck('address'))->toContain('a1b2c3d4e5');
+    expect(AuditLog::where('action', 'member.preauthorised')->where('resource_id', 'a1b2c3d4e5')->exists())->toBeTrue();
+});
+
+test('the IP is optional so the controller can auto-assign one', function () {
+    $posts = preauthControllerFake();
+    $this->actingAs($this->alphaAdmin);
+
+    alphaMembersPage()->set('add_member_id', 'a1b2c3d4e5')->call('addMember')->assertHasNoErrors();
+
+    expect($posts['a1b2c3d4e5'])->toBe(['authorized' => true, 'name' => '']);
+});
+
+test('adding a member rejects invalid node IDs, IPs and existing members', function (string $field, string $value) {
+    $posts = preauthControllerFake();
+    $this->actingAs($this->alphaAdmin);
+    ZerotierSyncService::syncNetwork(ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first(), force: true);
+
+    alphaMembersPage()
+        ->set('add_member_id', 'a1b2c3d4e5')
+        ->set($field, $value)
+        ->call('addMember')
+        ->assertHasErrors($field);
+
+    expect($posts->count())->toBe(0);
+})->with([
+    'too short' => ['add_member_id', 'a1b2c3'],
+    'not hex' => ['add_member_id', 'a1b2c3d4zz'],
+    'reserved prefix' => ['add_member_id', 'ff12345678'],
+    'all zero' => ['add_member_id', '0000000000'],
+    'path characters' => ['add_member_id', '../../../x'],
+    'already a member' => ['add_member_id', 'aabb000001'],
+    'bad IP' => ['add_member_ip', '10.0.0.999'],
+]);
+
+test('viewers cannot add members', function () {
+    $posts = preauthControllerFake();
+    $this->actingAs($this->alphaViewer);
+
+    alphaMembersPage()->set('add_member_id', 'a1b2c3d4e5')->call('addMember');
+
+    expect($posts->count())->toBe(0);
+});
+
+test('another team cannot add members to this network', function () {
+    $posts = preauthControllerFake();
+    $this->actingAs($this->betaAdmin);
+
+    alphaMembersPage()->assertStatus(403);
+    expect($posts->count())->toBe(0);
 });

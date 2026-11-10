@@ -55,6 +55,15 @@ new #[Title('Network Members')] class extends Component
 
     public string $new_ip = '';
 
+    // Add (pre-authorise) member
+    public string $add_member_id = '';
+
+    public string $add_member_name = '';
+
+    public string $add_member_description = '';
+
+    public string $add_member_ip = '';
+
     public string $sortBy = '';
 
     public string $sortDirection = 'asc';
@@ -342,6 +351,81 @@ new #[Title('Network Members')] class extends Component
         }
     }
 
+    public function addMemberModal(): void
+    {
+        if (! auth()->user()->canManageNetworks()) {
+            return;
+        }
+
+        $this->reset('add_member_id', 'add_member_name', 'add_member_description', 'add_member_ip');
+        $this->resetValidation();
+        Flux::modal('addMemberModal')->show();
+    }
+
+    /**
+     * Authorise a device before it joins: the controller creates the member
+     * from its node ID, so it is let in (with its name and IP) the moment it
+     * first connects instead of waiting for someone to approve it.
+     */
+    public function addMember(): void
+    {
+        if (! auth()->user()->canManageNetworks()) {
+            return;
+        }
+
+        $this->add_member_id = strtolower(trim($this->add_member_id));
+
+        $this->validate([
+            // A ZeroTier address: 10 hex digits, not all zero, not starting
+            // with ff (reserved).
+            'add_member_id' => ['required', 'string', 'regex:/^(?!ff)(?!0{10})[0-9a-f]{10}$/'],
+            'add_member_name' => 'nullable|string|max:255',
+            'add_member_description' => 'nullable|string|max:1000',
+            'add_member_ip' => 'nullable|ip',
+        ], [
+            'add_member_id.regex' => 'Enter the device\'s 10-character ZeroTier address, e.g. a1b2c3d4e5.',
+        ], [
+            'add_member_id' => 'node ID',
+            'add_member_name' => 'name',
+            'add_member_description' => 'description',
+            'add_member_ip' => 'IP address',
+        ]);
+
+        $service = $this->getService(); // aborts unless the network is accessible
+        $dbNetwork = $this->getDbNetwork();
+
+        if (ZerotierMember::where('zerotier_network_id', $dbNetwork->id)->where('node_id', $this->add_member_id)->exists()) {
+            $this->addError('add_member_id', 'That device is already a member of this network.');
+
+            return;
+        }
+
+        $payload = ['authorized' => true, 'name' => $this->add_member_name];
+        if ($this->add_member_ip !== '') {
+            $payload['ipAssignments'] = [$this->add_member_ip];
+        }
+
+        try {
+            $service->updateNetworkMember($this->networkId, $this->add_member_id, $payload);
+            ZerotierSyncService::syncNetwork($dbNetwork, force: true);
+
+            if ($this->add_member_description !== '') {
+                ZerotierMember::where('zerotier_network_id', $dbNetwork->id)
+                    ->where('node_id', $this->add_member_id)
+                    ->update(['description' => $this->add_member_description]);
+            }
+
+            AuditLog::record('member.preauthorised', 'member', $this->add_member_id, ['network_id' => $this->networkId, 'name' => $this->add_member_name]);
+            Flux::modal('addMemberModal')->close();
+            Flux::toast(variant: 'success', heading: 'Member added', text: $this->add_member_id.' is authorised and will be let in when it joins.');
+            $this->reset('add_member_id', 'add_member_name', 'add_member_description', 'add_member_ip');
+            $this->syncAndReload();
+        } catch (Exception $e) {
+            report($e);
+            Flux::toast(variant: 'danger', heading: 'Error', text: 'An unexpected error occurred. Please try again.');
+        }
+    }
+
     public function editMemberModal($nodeId): void
     {
         if (! auth()->user()->canManageNetworks()) {
@@ -518,6 +602,7 @@ new #[Title('Network Members')] class extends Component
             </div>
             <div class="flex items-center gap-2">
                 @if (auth()->user()->canManageNetworks())
+                    <flux:button size="sm" icon="plus" wire:click="addMemberModal">Add Member</flux:button>
                     <flux:button size="sm" icon="cog-6-tooth" wire:click="$dispatch('open-network-edit', { networkId: {{ Js::from($networkId) }}, tokenId: {{ Js::from($tokenId) }} })">Settings</flux:button>
                 @endif
                 <flux:button size="sm" icon="arrow-path" wire:click="syncAndReload">Refresh</flux:button>
@@ -544,7 +629,7 @@ new #[Title('Network Members')] class extends Component
                 <div class="text-center py-8">
                     <flux:icon name="users" class="mx-auto size-12 text-zinc-400 mb-4" />
                     <flux:heading>No Members</flux:heading>
-                    <flux:subheading>No devices have joined this network yet. Have a device join using the network ID above.</flux:subheading>
+                    <flux:subheading>No devices have joined this network yet. Have a device join using the network ID above, or add it by its node ID to authorise it in advance.</flux:subheading>
                 </div>
             </flux:card>
         @else
@@ -669,6 +754,24 @@ new #[Title('Network Members')] class extends Component
             <div class="flex justify-end gap-2">
                 <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>
                 <flux:button variant="danger" wire:click="deleteMember">Remove</flux:button>
+            </div>
+        </flux:modal>
+
+        {{-- Add Member Modal --}}
+        <flux:modal name="addMemberModal" focusable class="w-[450px]">
+            <flux:heading size="lg" class="mb-1">Add Member</flux:heading>
+            <flux:subheading class="mb-5">Authorise a device before it joins. It is let in as soon as it connects.</flux:subheading>
+
+            <div class="space-y-4">
+                <flux:input wire:model="add_member_id" label="Node ID" placeholder="e.g. a1b2c3d4e5" maxlength="10" class:input="font-mono" description="The device's ZeroTier address, shown by zerotier-cli info or in the ZeroTier app." />
+                <flux:input wire:model="add_member_name" label="Name" placeholder="e.g. Ryan's Laptop" />
+                <flux:textarea wire:model="add_member_description" label="Description" placeholder="Optional notes about this device..." rows="2" />
+                <flux:input wire:model="add_member_ip" label="IP Address" placeholder="Leave empty to auto-assign" />
+            </div>
+
+            <div class="flex justify-end space-x-2 mt-6">
+                <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>
+                <flux:button variant="primary" wire:click="addMember">Add Member</flux:button>
             </div>
         </flux:modal>
 
