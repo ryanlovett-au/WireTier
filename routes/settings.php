@@ -11,7 +11,7 @@ Route::middleware(['auth', 'throttle:60,1'])->group(function () {
     Route::livewire('settings/profile', 'pages::settings.profile')->name('profile.edit');
 });
 
-Route::middleware(['auth', 'verified', 'throttle:60,1'])->group(function () {
+Route::middleware(['auth', 'verified', 'team.two-factor', 'throttle:60,1'])->group(function () {
     Route::livewire('settings/appearance', 'pages::settings.appearance')->name('appearance.edit');
 
     Route::livewire('settings/security', 'pages::settings.security')

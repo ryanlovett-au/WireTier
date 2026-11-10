@@ -18,6 +18,13 @@ class Team extends Model
 
     protected $fillable = ['name', 'icon', 'colour'];
 
+    protected function casts(): array
+    {
+        return [
+            'require_two_factor' => 'boolean',
+        ];
+    }
+
     protected static function booted(): void
     {
         static::creating(function ($model) {

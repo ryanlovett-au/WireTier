@@ -69,7 +69,7 @@ A ZeroTier **controller** manages the membership and configuration of networks. 
 
 ### Authentication & Security
 - Email/password authentication with email verification
-- Two-factor authentication (TOTP) via Laravel Fortify
+- Two-factor authentication (TOTP) via Laravel Fortify, which team admins can require for their team
 - Password reset via email
 - Session management and account deletion
 - Security headers (Content-Security-Policy with per-request nonces, X-Frame-Options, HSTS, Content-Type-Options)

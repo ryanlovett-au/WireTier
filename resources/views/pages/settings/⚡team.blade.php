@@ -79,6 +79,10 @@ new #[Title('Team Settings')] class extends Component
         return $roles;
     }
 
+    /** The two-factor requirement waiting on the confirm modal. */
+    #[Locked]
+    public bool $pending_require_two_factor = false;
+
     public string $remove_team_user = '';
 
     public string $remove_team_user_name = '';
@@ -97,6 +101,15 @@ new #[Title('Team Settings')] class extends Component
         }
 
         $this->current_team = Team::findOrFail($teamId);
+
+        // A team that requires two-factor authentication stays closed until
+        // the user sets it up.
+        if (! auth()->user()->isAdmin() && ! auth()->user()->meetsTwoFactorRequirementOf($this->current_team)) {
+            session()->flash('two_factor_required', $this->current_team->name);
+            $this->redirectRoute('security.edit');
+
+            return;
+        }
         $this->edit_team_name = $this->current_team->name;
         $this->invite_team_expires = now()->addYear()->format('Y-m-d');
 
@@ -399,6 +412,60 @@ new #[Title('Team Settings')] class extends Component
         Flux::modal('deleteTeamConfirm')->show();
     }
 
+    /** Members who haven't set up two-factor authentication, shown before requiring it. */
+    #[Computed]
+    public function membersWithoutTwoFactor(): array
+    {
+        return User::whereIn('id', TeamUser::where('team_id', $this->current_team->id)->select('user_id'))
+            ->whereNull('two_factor_confirmed_at')
+            ->orderBy('name')
+            ->pluck('name')
+            ->all();
+    }
+
+    public function confirmTwoFactorRequirement(bool $require): void
+    {
+        if (! $this->canAdminister()) {
+            return;
+        }
+
+        // Requiring it without having it would lock the admin out of the team.
+        if ($require && ! auth()->user()->hasEnabledTwoFactorAuthentication()) {
+            Flux::toast(variant: 'danger', heading: 'Set up 2FA first', text: 'Turn on two-factor authentication for your own account before requiring it for the team.');
+
+            return;
+        }
+
+        $this->pending_require_two_factor = $require;
+        unset($this->membersWithoutTwoFactor);
+        Flux::modal('twoFactorRequirementConfirm')->show();
+    }
+
+    public function setTwoFactorRequirement(): void
+    {
+        if (! $this->canAdminister()) {
+            return;
+        }
+
+        $require = $this->pending_require_two_factor;
+
+        if ($require && ! auth()->user()->hasEnabledTwoFactorAuthentication()) {
+            return;
+        }
+
+        $this->current_team->forceFill(['require_two_factor' => $require])->save();
+
+        AuditLog::record($require ? 'team.two_factor_required' : 'team.two_factor_optional', 'team', $this->current_team->id, [
+            'team_name' => $this->current_team->name,
+            'members_without_two_factor' => $require ? count($this->membersWithoutTwoFactor) : null,
+        ]);
+
+        Flux::modal('twoFactorRequirementConfirm')->close();
+        Flux::toast(variant: 'success', heading: 'Saved', text: $require
+            ? 'Members now need two-factor authentication to use this team.'
+            : 'Two-factor authentication is now optional for this team.');
+    }
+
     public function deleteTeam()
     {
         if (! $this->canDeleteTeam()) {
@@ -494,6 +561,7 @@ new #[Title('Team Settings')] class extends Component
                     <flux:table.column>Email</flux:table.column>
                     <flux:table.column>Role</flux:table.column>
                     <flux:table.column>Expires</flux:table.column>
+                    <flux:table.column>2FA</flux:table.column>
                     <flux:table.column>Actions</flux:table.column>
                 </flux:table.columns>
 
@@ -508,6 +576,13 @@ new #[Title('Team Settings')] class extends Component
                             </flux:badge>
                         </flux:table.cell>
                         <flux:table.cell>{{ $member->expires ? \Carbon\Carbon::parse($member->expires)->format('d M Y') : 'Never' }}</flux:table.cell>
+                        <flux:table.cell>
+                            @if ($member->user->two_factor_confirmed_at)
+                                <flux:badge color="green" size="sm">On</flux:badge>
+                            @else
+                                <flux:badge color="zinc" size="sm">Off</flux:badge>
+                            @endif
+                        </flux:table.cell>
                         <flux:table.cell>
                             @if ($member->user->id != auth()->user()->id)
                                 <div class="flex gap-1">
@@ -552,6 +627,28 @@ new #[Title('Team Settings')] class extends Component
                 @endforeach
                 </flux:table.rows>
             </flux:table>
+        </flux:card>
+        @endif
+
+        @if ($this->canAdminister())
+        <flux:card class="mb-6">
+            <div class="flex items-start justify-between gap-6">
+                <div>
+                    <flux:heading>Two-Factor Authentication</flux:heading>
+                    <flux:text class="mt-1">
+                        @if ($current_team->require_two_factor)
+                            Required. Members without two-factor authentication are sent to set it up before they can use this team.
+                        @else
+                            Optional. Require it to make every member set up two-factor authentication before using this team.
+                        @endif
+                    </flux:text>
+                </div>
+                @if ($current_team->require_two_factor)
+                    <flux:button wire:click="confirmTwoFactorRequirement(false)">Make Optional</flux:button>
+                @else
+                    <flux:button variant="primary" wire:click="confirmTwoFactorRequirement(true)">Require 2FA</flux:button>
+                @endif
+            </div>
         </flux:card>
         @endif
 
@@ -675,6 +772,34 @@ new #[Title('Team Settings')] class extends Component
             <flux:button variant="danger" wire:click="removeUser">Remove</flux:button>
         </div>
     </flux:modal>
+
+    @if ($this->canAdminister())
+    <flux:modal name="twoFactorRequirementConfirm" focusable class="max-w-md">
+        <div class="text-center">
+            <flux:heading size="lg">{{ $pending_require_two_factor ? 'Require Two-Factor Authentication?' : 'Make Two-Factor Optional?' }}</flux:heading>
+            <flux:subheading class="mt-2">
+                @if ($pending_require_two_factor)
+                    @php $without = $this->membersWithoutTwoFactor; @endphp
+                    @if (count($without) === 0)
+                        Every member of <strong>{{ $current_team->name }}</strong> already has two-factor authentication.
+                    @else
+                        {{ count($without) }} {{ Str::plural('member', count($without)) }} of <strong>{{ $current_team->name }}</strong>
+                        {{ count($without) === 1 ? 'does' : 'do' }} not have it yet: {{ implode(', ', array_slice($without, 0, 5)) }}{{ count($without) > 5 ? ' and '.(count($without) - 5).' more' : '' }}.
+                        They will be sent to set it up before they can use the team again.
+                    @endif
+                @else
+                    Members of <strong>{{ $current_team->name }}</strong> will be able to use the team without two-factor authentication.
+                @endif
+            </flux:subheading>
+        </div>
+        <div class="flex justify-end space-x-2 mt-4">
+            <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>
+            <flux:button :variant="$pending_require_two_factor ? 'primary' : 'danger'" wire:click="setTwoFactorRequirement">
+                {{ $pending_require_two_factor ? 'Require 2FA' : 'Make Optional' }}
+            </flux:button>
+        </div>
+    </flux:modal>
+    @endif
 
     @if ($this->canDeleteTeam())
     <flux:modal name="deleteTeamConfirm" focusable class="max-w-sm">

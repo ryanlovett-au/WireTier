@@ -89,6 +89,12 @@ class User extends Authenticatable implements MustVerifyEmail
             return null;
         }
 
+        // A team that requires two-factor authentication is closed to members
+        // who haven't set it up (see RequireTeamTwoFactor for the redirect).
+        if (! $this->meetsTwoFactorRequirementOf($team)) {
+            return null;
+        }
+
         if (! $teamUser->expired) {
             return $team;
         }
@@ -147,7 +153,8 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->isAdminMemo ??= TeamUser::where('team_id', $adminTeam)
             ->where('user_id', $this->id)
             ->active()
-            ->exists();
+            ->exists()
+            && $this->meetsTwoFactorRequirementOf($adminTeam);
     }
 
     /**
@@ -157,10 +164,46 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function canAdministerTeam(string $teamId): bool
     {
-        return $this->isAdmin() || TeamUser::where('team_id', $teamId)
+        return $this->isAdmin() || (TeamUser::where('team_id', $teamId)
             ->where('user_id', $this->id)
             ->where('role', 'admin')
             ->active()
+            ->exists()
+            && $this->meetsTwoFactorRequirementOf($teamId));
+    }
+
+    /**
+     * Whether the user clears a team's two-factor requirement: the team
+     * doesn't require it, or the user has confirmed two-factor authentication.
+     */
+    public function meetsTwoFactorRequirementOf(Team|string|null $team): bool
+    {
+        $team = is_string($team) ? Team::find($team) : $team;
+
+        return ! $team?->require_two_factor || $this->hasEnabledTwoFactorAuthentication();
+    }
+
+    /**
+     * The selected team when it requires two-factor authentication that the
+     * user (a member of it) hasn't set up yet; null otherwise.
+     */
+    public function teamAwaitingTwoFactor(): ?Team
+    {
+        if (is_null($this->current_team) || $this->hasEnabledTwoFactorAuthentication()) {
+            return null;
+        }
+
+        $team = Team::find($this->current_team);
+
+        return $team?->require_two_factor && $this->belongsToTeam($team->id) ? $team : null;
+    }
+
+    /** Whether any team the user belongs to requires two-factor authentication. */
+    public function belongsToTeamRequiringTwoFactor(): bool
+    {
+        return TeamUser::where('user_id', $this->id)
+            ->active()
+            ->whereIn('team_id', Team::select('id')->where('require_two_factor', true))
             ->exists();
     }
 

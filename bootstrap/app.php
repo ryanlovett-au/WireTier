@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\RequireTeamTwoFactor;
 use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -14,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
             SecurityHeaders::class,
+        ]);
+
+        $middleware->alias([
+            'team.two-factor' => RequireTeamTwoFactor::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

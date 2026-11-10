@@ -11,7 +11,7 @@ Route::get('/', function () {
     return view('welcome');
 })->name('home');
 
-Route::middleware(['auth', 'verified', 'throttle:60,1'])->group(function () {
+Route::middleware(['auth', 'verified', 'team.two-factor', 'throttle:60,1'])->group(function () {
     Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
 
     // ZeroTier routes

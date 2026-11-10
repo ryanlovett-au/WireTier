@@ -23,6 +23,12 @@ new #[Title('Security settings')] class extends Component {
 
     public bool $requiresConfirmation;
 
+    /** A team the user belongs to requires 2FA, so it can't be turned off. */
+    public bool $teamRequiresTwoFactor = false;
+
+    /** The selected team waiting on the user to set up 2FA, if any. */
+    public ?string $awaitingTeam = null;
+
     /**
      * Mount the component.
      */
@@ -38,6 +44,9 @@ new #[Title('Security settings')] class extends Component {
             $this->twoFactorEnabled = auth()->user()->hasEnabledTwoFactorAuthentication();
             $this->requiresConfirmation = Features::optionEnabled(Features::twoFactorAuthentication(), 'confirm');
         }
+
+        $this->teamRequiresTwoFactor = auth()->user()->belongsToTeamRequiringTwoFactor();
+        $this->awaitingTeam = auth()->user()->teamAwaitingTwoFactor()?->name ?? session('two_factor_required');
     }
 
     /**
@@ -72,6 +81,7 @@ new #[Title('Security settings')] class extends Component {
     public function onTwoFactorEnabled(): void
     {
         $this->twoFactorEnabled = true;
+        $this->awaitingTeam = null;
     }
 
     /**
@@ -79,6 +89,12 @@ new #[Title('Security settings')] class extends Component {
      */
     public function disable(DisableTwoFactorAuthentication $disableTwoFactorAuthentication): void
     {
+        if (auth()->user()->belongsToTeamRequiringTwoFactor()) {
+            Flux::toast(variant: 'danger', heading: 'Two-factor required', text: 'One of your teams requires two-factor authentication, so it can\'t be turned off.');
+
+            return;
+        }
+
         $disableTwoFactorAuthentication(auth()->user());
 
         $this->twoFactorEnabled = false;
@@ -137,6 +153,13 @@ new #[Title('Security settings')] class extends Component {
                 <flux:subheading>{{ __('Manage your two-factor authentication settings') }}</flux:subheading>
 
                 <div class="flex flex-col w-full mx-auto space-y-6 text-sm" wire:cloak>
+                    @if ($awaitingTeam && ! $twoFactorEnabled)
+                        <flux:callout icon="shield-exclamation" variant="warning" class="mt-4">
+                            <flux:callout.heading>{{ $awaitingTeam }} requires two-factor authentication</flux:callout.heading>
+                            <flux:callout.text>Enable it below to keep using the team. You can still switch to another team from the team menu.</flux:callout.text>
+                        </flux:callout>
+                    @endif
+
                     @if ($twoFactorEnabled)
                         <div class="space-y-4">
                             <flux:text>
@@ -144,12 +167,16 @@ new #[Title('Security settings')] class extends Component {
                             </flux:text>
 
                             <div class="flex justify-start">
-                                <flux:button
-                                    variant="danger"
-                                    wire:click="disable"
-                                >
-                                    {{ __('Disable 2FA') }}
-                                </flux:button>
+                                @if ($teamRequiresTwoFactor)
+                                    <flux:text variant="subtle">{{ __('One of your teams requires two-factor authentication, so it can\'t be turned off.') }}</flux:text>
+                                @else
+                                    <flux:button
+                                        variant="danger"
+                                        wire:click="disable"
+                                    >
+                                        {{ __('Disable 2FA') }}
+                                    </flux:button>
+                                @endif
                             </div>
 
                             <livewire:pages::settings.two-factor.recovery-codes :$requiresConfirmation />
