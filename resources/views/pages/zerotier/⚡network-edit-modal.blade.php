@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\AuditLog;
+use App\Models\FlowRuleRevision;
 use App\Models\Team;
 use App\Models\TeamUser;
 use App\Models\ZerotierNetwork;
@@ -12,6 +13,7 @@ use App\Services\FlowRules\FlowRulesService;
 use App\Services\ZerotierService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -84,6 +86,14 @@ new class extends Component
     /** Why the live rules could not be rebuilt into a script, if they couldn't. */
     #[Locked]
     public string $rules_adopt_error = '';
+
+    /** The history entry waiting on the load confirmation. */
+    #[Locked]
+    public string $pending_revision_id = '';
+
+    /** Describes the history entry loaded into the editor, if any. */
+    #[Locked]
+    public string $rules_loaded_label = '';
 
     #[On('open-network-edit')]
     public function open(string $networkId, string $tokenId): void
@@ -260,6 +270,9 @@ new class extends Component
         $this->rules_state = 'default';
         $this->rules_from_live = false;
         $this->rules_adopt_error = '';
+        $this->rules_loaded_label = '';
+        $this->pending_revision_id = '';
+        unset($this->rulesHistory);
 
         if (! auth()->user()->isTeamAdmin()) {
             return;
@@ -359,6 +372,99 @@ new class extends Component
 
         $this->rules_source = $live;
         $this->rules_from_live = true;
+        $this->rules_loaded_label = '';
+        $this->compileRules();
+    }
+
+    // ─── Rules history ───────────────────────────────────────────────
+
+    /** Recent scripts applied to the network being edited, newest first. */
+    #[Computed]
+    public function rulesHistory(): array
+    {
+        if (! auth()->user()->isTeamAdmin() || $this->editing_network_id === '') {
+            return [];
+        }
+
+        $network = $this->findAccessibleNetwork($this->editing_network_id, $this->tokenId);
+
+        if (! $network) {
+            return [];
+        }
+
+        return $network->ruleRevisions()->with('user:id,name')->limit(FlowRuleRevision::KEEP)->get()
+            ->map(fn (FlowRuleRevision $r, int $i) => [
+                'id' => $r->id,
+                'when' => $r->created_at?->diffForHumans() ?? '',
+                'at' => $r->created_at?->toDayDateTimeString() ?? '',
+                'by' => $r->user?->name ?? 'Unknown user',
+                'summary' => "{$r->rule_count} ".Str::plural('rule', $r->rule_count)
+                    .", {$r->capability_count} ".Str::plural('capability', $r->capability_count)
+                    .", {$r->tag_count} ".Str::plural('tag', $r->tag_count),
+                // The newest entry is what's live, unless the rules drifted since.
+                'current' => $i === 0 && $r->hash === $network->rules_hash && $this->rules_state === 'managed',
+            ])->all();
+    }
+
+    /** A history entry of the network being edited; null for any other id. */
+    protected function revisionOfEditingNetwork(mixed $revisionId): ?FlowRuleRevision
+    {
+        if (! is_string($revisionId) || $revisionId === '') {
+            return null;
+        }
+
+        $network = $this->findAccessibleNetwork($this->editing_network_id, $this->tokenId);
+
+        return $network
+            ? FlowRuleRevision::where('id', $revisionId)->where('zerotier_network_id', $network->id)->first()
+            : null;
+    }
+
+    public function confirmLoadRevision(string $revisionId): void
+    {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
+        $revision = $this->revisionOfEditingNetwork($revisionId);
+
+        if (! $revision) {
+            return;
+        }
+
+        $this->pending_revision_id = $revision->id;
+        $network = $revision->network;
+
+        // Nothing to lose when the editor still holds the saved script.
+        if ($this->rules_source === (string) $network?->rules_source || trim($this->rules_source) === '') {
+            $this->loadRevision();
+
+            return;
+        }
+
+        Flux::modal('loadRevisionConfirm')->show();
+    }
+
+    /** Put the pending history entry in the editor; saving it rolls back. */
+    public function loadRevision(): void
+    {
+        if (! auth()->user()->isTeamAdmin()) {
+            return;
+        }
+
+        Flux::modal('loadRevisionConfirm')->close();
+
+        $revision = $this->revisionOfEditingNetwork($this->pending_revision_id);
+        $this->pending_revision_id = '';
+
+        if (! $revision) {
+            return;
+        }
+
+        $this->rules_source = $revision->source;
+        $this->rules_from_live = false;
+        $this->rules_loaded_label = 'the version saved '.($revision->created_at?->diffForHumans() ?? '')
+            .' by '.($revision->user?->name ?? 'an unknown user');
         $this->compileRules();
     }
 
@@ -423,6 +529,7 @@ new class extends Component
 
         $this->rules_source = FlowRulesService::EXAMPLE_SOURCE;
         $this->rules_from_live = false;
+        $this->rules_loaded_label = '';
         $this->compileRules();
 
         Flux::modal('loadExampleConfirm')->close();
@@ -490,7 +597,9 @@ new class extends Component
         $this->live_rules_json = '';
         $this->rules_from_live = false;
         $this->rules_adopt_error = '';
+        $this->rules_loaded_label = '';
         $this->rules_updated_label = $dbNetwork->rules_updated_at?->diffForHumans() ?? '';
+        unset($this->rulesHistory);
 
         Flux::toast(variant: 'success', heading: 'Rules Applied', text: 'Flow rules are now active on the network.');
         $this->dispatch('network-updated', networkId: $this->editing_network_id);
@@ -825,10 +934,39 @@ new class extends Component
                     @endif
                 </div>
 
+                @if ($rules_loaded_label)
+                    <div class="flex items-start gap-2 px-3 py-2 rounded-md border border-sky-200 bg-sky-50 dark:bg-sky-950/30 dark:border-sky-800 text-xs text-sky-900 dark:text-sky-200">
+                        <flux:icon name="arrow-uturn-left" class="size-4 shrink-0" />
+                        <span>The editor holds {{ $rules_loaded_label }}. Save Rules to roll back to it.</span>
+                    </div>
+                @endif
+
                 @if ($rules_preview && ! $rules_error)
                     <details>
                         <summary class="cursor-pointer text-xs font-medium text-zinc-500">Preview compiled rules</summary>
                         <pre class="mt-2 max-h-48 overflow-auto rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 p-2 text-xs font-mono text-zinc-700 dark:text-zinc-300">{{ $rules_preview }}</pre>
+                    </details>
+                @endif
+
+                @if (count($this->rulesHistory) > 0)
+                    <details>
+                        <summary class="cursor-pointer text-xs font-medium text-zinc-500">History ({{ count($this->rulesHistory) }})</summary>
+                        <ul class="mt-2 max-h-48 overflow-auto divide-y divide-zinc-200 dark:divide-zinc-700 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs">
+                            @foreach ($this->rulesHistory as $revision)
+                                <li wire:key="rules-revision-{{ $revision['id'] }}" class="flex items-center justify-between gap-3 px-3 py-2">
+                                    <div class="min-w-0">
+                                        <div class="text-zinc-700 dark:text-zinc-300">
+                                            <span title="{{ $revision['at'] }}">{{ $revision['when'] }}</span> | {{ $revision['by'] }}
+                                            @if ($revision['current'])
+                                                <flux:badge size="sm" color="green" class="ms-1">Live</flux:badge>
+                                            @endif
+                                        </div>
+                                        <div class="text-zinc-400">{{ $revision['summary'] }}</div>
+                                    </div>
+                                    <flux:button size="xs" variant="ghost" icon="arrow-uturn-left" wire:click="confirmLoadRevision({{ Js::from($revision['id']) }})">Load</flux:button>
+                                </li>
+                            @endforeach
+                        </ul>
                     </details>
                 @endif
 
@@ -947,6 +1085,24 @@ new class extends Component
                 <flux:button variant="filled">Cancel</flux:button>
             </flux:modal.close>
             <flux:button variant="primary" wire:click="loadLiveRules">Replace Script</flux:button>
+        </div>
+    </flux:modal>
+
+    <flux:modal name="loadRevisionConfirm" focusable class="max-w-sm">
+        <div class="w-14 h-14 rounded-full bg-zinc-100 dark:bg-zinc-800 p-4 mt-4 mb-4 mx-auto flex items-center justify-center">
+            <flux:icon name="arrow-uturn-left" class="size-6 text-zinc-600 dark:text-zinc-300" />
+        </div>
+
+        <flux:heading size="lg" class="text-center">Load Earlier Version?</flux:heading>
+        <flux:subheading class="text-center mt-2 mb-6">
+            This replaces the script in the editor with the earlier version. Your unsaved edits will be lost. Nothing is applied until you save.
+        </flux:subheading>
+
+        <div class="flex justify-end gap-2">
+            <flux:modal.close>
+                <flux:button variant="filled">Cancel</flux:button>
+            </flux:modal.close>
+            <flux:button variant="primary" wire:click="loadRevision">Replace Script</flux:button>
         </div>
     </flux:modal>
 

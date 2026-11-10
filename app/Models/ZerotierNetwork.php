@@ -27,6 +27,10 @@ class ZerotierNetwork extends Model
         static::creating(function ($model) {
             $model->id = Str::uuid7();
         });
+
+        static::deleting(function (ZerotierNetwork $network) {
+            $network->ruleRevisions()->delete();
+        });
     }
 
     protected function casts(): array
@@ -58,6 +62,12 @@ class ZerotierNetwork extends Model
         }
 
         return RulesFingerprint::isDefault($live) ? 'default' : 'unmanaged';
+    }
+
+    /** Rules scripts applied by WireTier, newest first. */
+    public function ruleRevisions(): HasMany
+    {
+        return $this->hasMany(FlowRuleRevision::class)->orderByDesc('created_at')->orderByDesc('id');
     }
 
     public function members(): HasMany

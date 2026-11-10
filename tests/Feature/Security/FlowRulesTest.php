@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\AuditLog;
+use App\Models\FlowRuleRevision;
 use App\Models\User;
 use App\Models\ZerotierMember;
 use App\Models\ZerotierNetwork;
@@ -258,6 +259,108 @@ test('a team member who is not an admin cannot load live rules', function () {
     openRulesEditor($this->alphaMember)
         ->call('loadLiveRules')
         ->assertSet('rules_source', '');
+});
+
+// ─── History ─────────────────────────────────────────────────────────────
+
+test('each save is kept in the rules history with who saved it', function () {
+    openRulesEditor($this->alphaAdmin)
+        ->set('rules_source', SSH_RULES)
+        ->call('saveRules')
+        ->set('rules_source', "drop;\n")
+        ->call('saveRules');
+
+    $revisions = $this->network->fresh()->ruleRevisions;
+    expect($revisions)->toHaveCount(2);
+    expect($revisions[0]->source)->toBe("drop;\n");
+    expect($revisions[1]->source)->toBe(SSH_RULES);
+    expect($revisions[1]->user_id)->toBe($this->alphaAdmin->id);
+    expect($revisions[1]->capability_count)->toBe(1);
+
+    openRulesEditor($this->alphaAdmin)
+        ->assertSee('History (2)')
+        ->assertSee($this->alphaAdmin->name)
+        ->assertSee('Live');
+});
+
+test('a saved version can be loaded and saved again to roll back', function () {
+    $service = app(FlowRulesService::class);
+    $this->actingAs($this->alphaAdmin);
+    $service->apply($this->network->fresh(), SSH_RULES);
+    $sshRules = $this->controller['rules'];
+    $service->apply($this->network->fresh(), "drop;\n");
+
+    $old = $this->network->fresh()->ruleRevisions->last();
+
+    openRulesEditor($this->alphaAdmin)
+        ->call('confirmLoadRevision', $old->id)
+        ->assertSet('rules_source', SSH_RULES)
+        ->assertSee('Save Rules to roll back')
+        ->call('saveRules')
+        ->assertSet('rules_loaded_label', '');
+
+    expect($this->controller['rules'])->toBe($sshRules);
+    expect($this->network->fresh()->ruleRevisions)->toHaveCount(3);
+});
+
+test('loading a version over unsaved edits asks first in a Flux modal', function () {
+    $this->actingAs($this->alphaAdmin);
+    app(FlowRulesService::class)->apply($this->network->fresh(), SSH_RULES);
+    $revision = $this->network->fresh()->ruleRevisions->first();
+
+    openRulesEditor($this->alphaAdmin)
+        ->set('rules_source', "# my edits\naccept;")
+        ->call('confirmLoadRevision', $revision->id)
+        ->assertDispatched('modal-show', name: 'loadRevisionConfirm')
+        ->assertSet('rules_source', "# my edits\naccept;")
+        ->call('loadRevision')
+        ->assertSet('rules_source', SSH_RULES);
+});
+
+test('another network\'s history cannot be loaded', function () {
+    $beta = ZerotierNetwork::where('network_id', S::BETA_NETWORK_ID)->first();
+    $foreign = FlowRuleRevision::create([
+        'zerotier_network_id' => $beta->id, 'source' => "# beta secret\naccept;", 'hash' => str_repeat('0', 64),
+        'rule_count' => 1, 'capability_count' => 0, 'tag_count' => 0,
+    ]);
+
+    openRulesEditor($this->alphaAdmin)
+        ->call('confirmLoadRevision', $foreign->id)
+        ->call('loadRevision')
+        ->assertSet('rules_source', FlowRulesService::DEFAULT_SOURCE);
+});
+
+test('a team member who is not an admin cannot load history', function () {
+    $this->actingAs($this->alphaAdmin);
+    app(FlowRulesService::class)->apply($this->network->fresh(), SSH_RULES);
+    $revision = $this->network->fresh()->ruleRevisions->first();
+
+    openRulesEditor($this->alphaMember)
+        ->call('confirmLoadRevision', $revision->id)
+        ->assertSet('rules_source', '')
+        ->assertDontSee('History (');
+});
+
+test('history keeps only the most recent versions', function () {
+    $this->actingAs($this->alphaAdmin);
+    $service = app(FlowRulesService::class);
+    for ($i = 0; $i < FlowRuleRevision::KEEP + 3; $i++) {
+        $service->apply($this->network->fresh(), "# version {$i}\naccept;\n");
+    }
+
+    $revisions = $this->network->fresh()->ruleRevisions;
+    expect($revisions)->toHaveCount(FlowRuleRevision::KEEP);
+    expect($revisions->first()->source)->toContain('version '.(FlowRuleRevision::KEEP + 2));
+    expect($revisions->last()->source)->toContain('version 3');
+});
+
+test('deleting a network deletes its rules history', function () {
+    $this->actingAs($this->alphaAdmin);
+    app(FlowRulesService::class)->apply($this->network->fresh(), SSH_RULES);
+
+    $this->network->fresh()->delete();
+
+    expect(FlowRuleRevision::count())->toBe(0);
 });
 
 // ─── Members ─────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
 
 namespace App\Services\FlowRules;
 
+use App\Models\FlowRuleRevision;
 use App\Models\ZerotierNetwork;
 use App\Services\ZerotierService;
 
@@ -76,14 +77,38 @@ RULES;
             $live = $service->getControllerNetwork($network->network_id);
         }
 
+        $hash = RulesFingerprint::of($live);
+
         $network->update([
             'config' => array_merge($network->config ?? [], $live),
             'rules_source' => $source,
             'rules_meta' => $compiled->metadata(),
-            'rules_hash' => RulesFingerprint::of($live),
+            'rules_hash' => $hash,
             'rules_updated_at' => now(),
         ]);
 
+        $this->recordRevision($network, $source, $compiled, $hash);
+
         return $compiled;
+    }
+
+    /** Keep the applied script in the network's history, pruning the oldest. */
+    private function recordRevision(ZerotierNetwork $network, string $source, CompiledRules $compiled, string $hash): void
+    {
+        FlowRuleRevision::create([
+            'zerotier_network_id' => $network->id,
+            'user_id' => auth()->id(),
+            'source' => $source,
+            'meta' => $compiled->metadata(),
+            'hash' => $hash,
+            'rule_count' => count($compiled->rules),
+            'capability_count' => count($compiled->capabilities),
+            'tag_count' => count($compiled->tags),
+        ]);
+
+        $stale = $network->ruleRevisions()->skip(FlowRuleRevision::KEEP)->take(PHP_INT_MAX)->pluck('id');
+        if ($stale->isNotEmpty()) {
+            FlowRuleRevision::whereIn('id', $stale)->delete();
+        }
     }
 }
