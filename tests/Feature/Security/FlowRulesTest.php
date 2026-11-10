@@ -399,6 +399,16 @@ test('team admin grants capabilities and tags using the script\'s names', functi
     $page->assertSee('ssh')->assertSee('dept=sales')->assertSee('#9999=5');
 });
 
+test('flag tag values are shown by flag name when every bit is named', function () {
+    app(FlowRulesService::class)->apply($this->network->fresh(), "tag role\n id 3000\n flag 0 admin\n flag 1 audit\n flag 2,3 ops\n;\naccept;\n");
+    $this->actingAs($this->alphaAdmin);
+
+    $page = Livewire::test('pages::zerotier.members', ['networkId' => S::ALPHA_NETWORK_ID, 'tokenId' => S::ALPHA_TOKEN_ID]);
+
+    expect($page->instance()->tagLabels([[3000, 3], [3000, 1], [3000, 13], [3000, 16], [3000, 4], [3000, 0]]))
+        ->toBe(['role=admin|audit', 'role=admin', 'role=admin|ops', 'role=16', 'role=4', 'role=0']);
+});
+
 test('a team member who is not an admin cannot change capabilities or tags', function () {
     app(FlowRulesService::class)->apply($this->network->fresh(), SSH_RULES);
     ZerotierSyncService::syncNetwork($this->network->fresh(), force: true);

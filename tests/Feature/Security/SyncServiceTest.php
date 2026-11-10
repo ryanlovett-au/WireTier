@@ -147,6 +147,30 @@ test('syncNetwork builds client version string', function () {
     expect($member->client_version)->toBe('1.14.2');
 });
 
+test('syncNetwork leaves the version empty for a member that has never connected', function () {
+    Http::fake(function ($request) {
+        $url = $request->url();
+        if (preg_match('#/member/([a-f0-9]+)$#', $url, $m)) {
+            return Http::response(['address' => $m[1], 'authorized' => true, 'vMajor' => -1, 'vMinor' => -1, 'vRev' => -1]);
+        }
+        if (str_contains($url, '/member')) {
+            return Http::response(['aabb000001' => true]);
+        }
+        if (preg_match('#/controller/network/([a-zA-Z0-9_]+)$#', $url, $m)) {
+            return Http::response(['nwid' => $m[1], 'name' => 'Synced Net', 'private' => true]);
+        }
+
+        return Http::response([]);
+    });
+
+    $network = ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->first();
+    ZerotierSyncService::syncNetwork($network);
+
+    $member = ZerotierMember::where('zerotier_network_id', $network->id)
+        ->where('node_id', 'aabb000001')->first();
+    expect($member->client_version)->toBeNull();
+});
+
 test('syncNetwork translates API authorized to AU English authorised', function () {
     syncHttpFakes();
 

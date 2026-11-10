@@ -161,7 +161,11 @@ new #[Title('Network Members')] class extends Component
         return array_map(fn ($id) => $names[$id] ?? "#{$id}", $ids);
     }
 
-    /** "name=value" labels for a member's [[tagId, value], …], using enum names where known. */
+    /**
+     * "name=value" labels for a member's [[tagId, value], …], using enum names
+     * where known and flag names joined with "|" when the value is made up of
+     * defined flags only.
+     */
     public function tagLabels(array $tags): array
     {
         $defs = collect($this->rules_meta['tags'] ?? [])->mapWithKeys(fn ($t, $name) => [$t['id'] => ['name' => $name] + $t]);
@@ -176,8 +180,27 @@ new #[Title('Network Members')] class extends Component
 
             $enum = array_search($value, $def['enums'] ?? [], true);
 
-            return $def['name'].'='.($enum !== false ? $enum : $value);
+            return $def['name'].'='.($enum !== false ? $enum : $this->flagNames((int) $value, $def['flags'] ?? []) ?? $value);
         }, $tags);
+    }
+
+    /** "admin|audit" when every set bit of $value belongs to a named flag, otherwise null. */
+    protected function flagNames(int $value, array $flags): ?string
+    {
+        if ($value <= 0 || $flags === []) {
+            return null;
+        }
+
+        $names = [];
+        $covered = 0;
+        foreach ($flags as $name => $mask) {
+            if ($mask > 0 && ($value & $mask) === $mask) {
+                $names[] = $name;
+                $covered |= $mask;
+            }
+        }
+
+        return $covered === $value ? implode('|', $names) : null;
     }
 
     protected function hasRulesMeta(): bool
@@ -598,7 +621,7 @@ new #[Title('Network Members')] class extends Component
                                 @endif
                             </flux:table.cell>
                             <flux:table.cell class="text-xs text-zinc-500">
-                                @if (! empty($member['_version']))
+                                @if (! empty($member['_version']) && ! str_starts_with($member['_version'], '-'))
                                     <div>v{{ $member['_version'] }}</div>
                                 @endif
                                 @if (! empty($member['_physicalAddr']))

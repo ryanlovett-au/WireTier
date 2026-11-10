@@ -114,9 +114,10 @@ class ZerotierSyncService
                 try {
                     $memberData = $service->getNetworkMember($network->network_id, $nodeId);
 
-                    // Build version string
+                    // Build version string; the controller reports -1 for a
+                    // member that has never connected.
                     $version = null;
-                    if (isset($memberData['vMajor'])) {
+                    if (isset($memberData['vMajor']) && $memberData['vMajor'] >= 0) {
                         $version = $memberData['vMajor'].'.'.($memberData['vMinor'] ?? 0).'.'.($memberData['vRev'] ?? 0);
                     }
 
