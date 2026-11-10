@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\SecurityHeaders;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
@@ -59,6 +60,22 @@ test('pages get a nonce-based Content-Security-Policy that every script tag carr
     foreach ($tags[0] as $tag) {
         expect($tag)->toContain("nonce=\"{$nonce}\"");
     }
+});
+
+test('signed-in pages carry the nonce on every script tag too', function () {
+    // The app layout is separate from the auth layout /login uses, and a
+    // missing Flux nonce there only shows up as a broken page in the browser.
+    $this->actingAs(User::factory()->create());
+
+    $response = $this->get(route('dashboard'))->assertOk();
+    $nonce = cspNonce($response->headers->get('Content-Security-Policy'));
+
+    preg_match_all('/<script\b[^>]*>/i', $response->getContent(), $tags);
+    expect($tags[0])->not->toBeEmpty();
+    foreach ($tags[0] as $tag) {
+        expect($tag)->toContain("nonce=\"{$nonce}\"");
+    }
+    expect(implode("\n", $tags[0]))->toContain('flux'); // Flux's own script tag is among them
 });
 
 test('each response gets a fresh nonce', function () {

@@ -2,12 +2,15 @@
 
 namespace App\Console\Commands;
 
+use App\Http\Middleware\SecurityHeaders;
 use App\Tools\Security\Analysis\LivewireSurface;
 use App\Tools\Security\Analysis\PhpSource;
 use App\Tools\Security\AuditReport;
 use App\Tools\Security\Checks\ClientInputLookupCheck;
 use App\Tools\Security\Checks\ControllerApiInputCheck;
 use App\Tools\Security\Checks\ControllerPayloadCheck;
+use App\Tools\Security\Checks\CspNonceCheck;
+use App\Tools\Security\Checks\CspPolicyCheck;
 use App\Tools\Security\Checks\CurrentTeamRoleCheck;
 use App\Tools\Security\Checks\JsAttributeEchoCheck;
 use Illuminate\Console\Command;
@@ -39,7 +42,7 @@ class SecurityAudit extends Command
     /**
      * Models owned by a team: every lookup must be tied to the caller's team.
      */
-    public const TEAM_SCOPED_MODELS = ['ZerotierNetwork', 'ZerotierMember', 'TeamInvitation'];
+    public const TEAM_SCOPED_MODELS = ['ZerotierNetwork', 'ZerotierMember', 'TeamInvitation', 'FlowRuleRevision'];
 
     /**
      * Models every team may look up by a client-chosen key by design.
@@ -74,6 +77,12 @@ class SecurityAudit extends Command
             'file' => 'resources/views/welcome.blade.php',
             'match' => '{!! $iconPath !!}',
             'reason' => 'Feature-card SVG paths are string literals defined in the same template; nothing user-supplied is rendered.',
+        ],
+        [
+            'category' => 'Content-Security-Policy',
+            'file' => 'app/Http/Middleware/SecurityHeaders.php',
+            'match' => "'unsafe-eval'",
+            'reason' => 'Alpine (bundled with Livewire, used by Flux) evaluates directive expressions with new Function(); its CSP build does not support Livewire and Flux. Blade escaping and the Alpine/Livewire JS Injection check cover injected attributes.',
         ],
     ];
 
@@ -200,6 +209,16 @@ class SecurityAudit extends Command
             'Session Configuration' => fn () => $this->scanSessionConfig(),
             'CSRF Exclusions' => fn () => $this->scanCsrfExclusions(),
             'Security Headers' => fn () => $this->scanSecurityHeaders(),
+            'Content-Security-Policy' => fn () => $this->scanContentSecurityPolicy(),
+            'CSP Nonces' => function () {
+                $check = new CspNonceCheck;
+                $out = [];
+                foreach ($this->allBladeFiles() as $file) {
+                    array_push($out, ...$check->check($file, (string) file_get_contents($file)));
+                }
+
+                return $out;
+            },
             'Password Reset Expiry' => fn () => $this->scanPasswordResetExpiry(),
             'Debug Default' => fn () => $this->scanDebugDefault(),
         ];
@@ -1480,6 +1499,44 @@ class SecurityAudit extends Command
                     0,
                     'SecurityHeaders middleware exists but is not registered in bootstrap/app.php - headers never reach clients',
                     'Call $middleware->web(append: [\\App\\Http\\Middleware\\SecurityHeaders::class]) in withMiddleware()',
+                );
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * What the production policy allows (no Vite dev server), and that it is
+     * enforced unless WIRETIER_CSP says otherwise.
+     */
+    private function scanContentSecurityPolicy(): array
+    {
+        $middleware = app_path('Http/Middleware/SecurityHeaders.php');
+        if (! File::exists($middleware) || ! method_exists(SecurityHeaders::class, 'directives')) {
+            return [AuditReport::finding(
+                'medium',
+                CspPolicyCheck::CATEGORY,
+                $middleware,
+                0,
+                'SecurityHeaders::directives() is missing - the audit cannot check what the Content-Security-Policy allows',
+                'Keep the policy in a public static directives(string $nonce): array so it can be checked',
+            )];
+        }
+
+        $findings = (new CspPolicyCheck)->check(SecurityHeaders::directives('audit'), $middleware, File::get($middleware));
+
+        $config = config_path('wiretier.php');
+        if (File::exists($config)) {
+            $content = File::get($config);
+            if (! preg_match("/'csp'\s*=>\s*env\(\s*'WIRETIER_CSP'\s*,\s*'enforce'\s*\)/", $content)) {
+                $findings[] = AuditReport::finding(
+                    'medium',
+                    CspPolicyCheck::CATEGORY,
+                    $config,
+                    $this->lineOf($content, "'csp'"),
+                    "wiretier.csp does not default to 'enforce' - installs without WIRETIER_CSP get no enforced policy",
+                    "Use 'csp' => env('WIRETIER_CSP', 'enforce')",
                 );
             }
         }

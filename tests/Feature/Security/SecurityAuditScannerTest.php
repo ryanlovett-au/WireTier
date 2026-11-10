@@ -7,10 +7,13 @@
  */
 
 use App\Console\Commands\SecurityAudit;
+use App\Http\Middleware\SecurityHeaders;
 use App\Tools\Security\Analysis\PhpSource;
 use App\Tools\Security\Checks\ClientInputLookupCheck;
 use App\Tools\Security\Checks\ControllerApiInputCheck;
 use App\Tools\Security\Checks\ControllerPayloadCheck;
+use App\Tools\Security\Checks\CspNonceCheck;
+use App\Tools\Security\Checks\CspPolicyCheck;
 use App\Tools\Security\Checks\CurrentTeamRoleCheck;
 use App\Tools\Security\Checks\JsAttributeEchoCheck;
 use Illuminate\Support\Facades\Artisan;
@@ -412,6 +415,98 @@ test('scanners() stays offline unless the command enables the dependency check',
     $audit = new SecurityAudit;
     $audit->includeDependencies = true;
     expect($audit->scanners())->toHaveKey('Dependency Advisories');
+});
+
+// ─── Content-Security-Policy ─────────────────────────────────────────────
+
+function cspFindings(array $directives): array
+{
+    return (new CspPolicyCheck)->check($directives, 'app/Http/Middleware/SecurityHeaders.php');
+}
+
+test('the app policy only reports the reviewed unsafe-eval', function () {
+    $findings = cspFindings(SecurityHeaders::directives('n'));
+
+    expect($findings)->toHaveCount(1);
+    expect($findings[0]['severity'])->toBe('low');
+    expect($findings[0]['description'])->toContain("'unsafe-eval'");
+});
+
+test('flags script sources that let injected or third-party script run', function (array $scripts, string $expected) {
+    $findings = cspFindings([...SecurityHeaders::directives('n'), 'script-src' => $scripts]);
+    $high = array_values(array_filter($findings, fn ($f) => $f['severity'] === 'high'));
+
+    expect($high)->toHaveCount(1);
+    expect($high[0]['description'])->toContain($expected);
+})->with([
+    'unsafe-inline' => [["'self'", "'nonce-n'", "'unsafe-inline'"], "'unsafe-inline'"],
+    'any https host' => [["'self'", 'https:'], 'https:'],
+    'wildcard' => [["'self'", '*'], '*'],
+    'wildcard subdomain' => [["'self'", 'https://*.example.com'], 'https://*.example.com'],
+    'data urls' => [["'self'", 'data:'], 'data:'],
+]);
+
+test('script-src falls back to default-src', function () {
+    $policy = SecurityHeaders::directives('n');
+    unset($policy['script-src']);
+    $policy['default-src'] = ["'self'", "'unsafe-inline'"];
+
+    expect(descriptions(cspFindings($policy)))->toContain("default-src allows 'unsafe-inline' - injected <script> tags and on* handlers run");
+
+    expect(descriptions(cspFindings(['object-src' => ["'none'"]])))
+        ->toContain('The CSP has neither script-src nor default-src - scripts from anywhere can run');
+});
+
+test('flags missing object-src, base-uri, form-action and frame-ancestors', function () {
+    $policy = SecurityHeaders::directives('n');
+    unset($policy['object-src'], $policy['base-uri'], $policy['form-action'], $policy['frame-ancestors']);
+
+    $found = array_column(cspFindings($policy), 'severity', 'description');
+
+    // object-src falls back to default-src 'self', which still allows same-origin plugins.
+    expect($found)->toMatchArray([
+        "object-src is not 'none' - plugin content (<object>, <embed>) can load and run outside the script rules" => 'medium',
+        'The CSP has no base-uri - an injected <base> tag can repoint every relative script and form URL' => 'medium',
+        'The CSP has no form-action - an injected form can post to another site' => 'low',
+        'The CSP has no frame-ancestors - only X-Frame-Options stops the app being framed' => 'low',
+    ]);
+});
+
+test('flags a wildcard in any other directive', function () {
+    $policy = [...SecurityHeaders::directives('n'), 'connect-src' => ["'self'", '*']];
+
+    expect(descriptions(cspFindings($policy)))->toContain('connect-src allows any host (*)');
+});
+
+test('flags script in views that the CSP blocks', function () {
+    $view = <<<'BLADE'
+        @fluxAppearance
+        @fluxScripts
+        <script>window.x = 1</script>
+        <script src="/js/thing.js"></script>
+        <button type="button" onclick="go()">Go</button>
+        <a href="javascript:void(0)">Link</a>
+    BLADE;
+
+    $findings = (new CspNonceCheck)->check('/fixtures/layout.blade.php', $view);
+
+    expect(array_column($findings, 'line'))->toBe([1, 2, 3, 4, 5, 6]);
+    expect(array_unique(array_column($findings, 'severity')))->toBe(['medium']);
+    expect($findings[0]['description'])->toBe("@fluxAppearance has no nonce - the CSP blocks Flux's script and the page breaks");
+    expect($findings[4]['description'])->toContain('onclick=');
+});
+
+test('accepts nonced script, data blocks and Alpine or Livewire handlers', function () {
+    $view = <<<'BLADE'
+        @fluxAppearance(['nonce' => Vite::cspNonce()])
+        @fluxScripts(['nonce' => Vite::cspNonce()])
+        <script nonce="{{ Vite::cspNonce() }}">window.x = 1</script>
+        <script type="application/json" id="data">{"a": 1}</script>
+        <button type="button" @click="open = true" x-on:keydown="close()" wire:click="save">Go</button>
+        <p>Turn this on = never.</p>
+    BLADE;
+
+    expect((new CspNonceCheck)->check('/fixtures/layout.blade.php', $view))->toBe([]);
 });
 
 // ─── Whole-codebase gates ────────────────────────────────────────────────

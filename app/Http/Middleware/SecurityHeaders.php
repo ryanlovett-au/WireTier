@@ -50,9 +50,23 @@ class SecurityHeaders
      */
     protected function contentSecurityPolicy(string $nonce): string
     {
-        $hot = $this->viteDevServer();
+        return implode('; ', array_map(
+            fn ($directive, $sources) => $directive.' '.implode(' ', $sources),
+            array_keys($policy = self::directives($nonce, $this->viteDevServer())),
+            $policy,
+        ));
+    }
 
-        $policy = [
+    /**
+     * The policy as directive => sources. Public so security:audit can check
+     * what production allows (no dev server) without sending a request.
+     *
+     * @param  list<string>  $hot  Vite dev server sources (local only)
+     * @return array<string, list<string>>
+     */
+    public static function directives(string $nonce, array $hot = []): array
+    {
+        return [
             'default-src' => ["'self'"],
             'script-src' => ["'self'", "'nonce-{$nonce}'", "'unsafe-eval'", ...$hot],
             'style-src' => ["'self'", "'unsafe-inline'", 'https://fonts.bunny.net', ...$hot],
@@ -64,12 +78,6 @@ class SecurityHeaders
             'form-action' => ["'self'"],
             'frame-ancestors' => ["'none'"],
         ];
-
-        return implode('; ', array_map(
-            fn ($directive, $sources) => $directive.' '.implode(' ', $sources),
-            array_keys($policy),
-            $policy,
-        ));
     }
 
     /**
