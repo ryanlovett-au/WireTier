@@ -324,6 +324,7 @@ new #[Title('ZeroTier Networks')] class extends Component
             $this->untracked_networks = array_values(
                 array_filter($this->untracked_networks, fn ($n) => $n['nwid'] !== $this->delete_untracked_id)
             );
+            Cache::forget("zt_controller_networks_{$token->id}");
             AuditLog::record('network.untracked_deleted', 'network', $this->delete_untracked_id);
             $this->delete_untracked_id = '';
             $this->delete_untracked_name = '';

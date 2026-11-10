@@ -195,6 +195,21 @@ test('deleteNetwork removes via API and DB record', function () {
     expect(ZerotierNetwork::where('network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->exists())->toBeFalse();
 });
 
+test('a deleted network leaves the cached list straight away', function () {
+    defaultHttpFakes();
+    $this->actingAs($this->alphaAdmin);
+    session()->forget('current_team');
+
+    $page = Livewire::test('pages::zerotier.networks')
+        ->set('selectedToken', SecurityTestSeeder::ALPHA_TOKEN_ID)
+        ->call('loadNetworks');
+    expect(collect($page->get('networks'))->pluck('nwid'))->toContain(SecurityTestSeeder::ALPHA_NETWORK_ID);
+
+    $page->set('delete_network_id', SecurityTestSeeder::ALPHA_NETWORK_ID)->call('deleteNetwork');
+
+    expect(collect($page->get('networks'))->pluck('nwid'))->not->toContain(SecurityTestSeeder::ALPHA_NETWORK_ID);
+});
+
 test('open populates edit fields from API data', function () {
     defaultHttpFakes();
     $this->actingAs($this->alphaAdmin);

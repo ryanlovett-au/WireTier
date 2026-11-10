@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class ZerotierNetwork extends Model
@@ -30,6 +31,16 @@ class ZerotierNetwork extends Model
 
         static::deleting(function (ZerotierNetwork $network) {
             $network->ruleRevisions()->delete();
+        });
+
+        // The network list, dashboard counts and untracked count are cached;
+        // without this a deleted network stays listed until they expire.
+        static::deleted(function (ZerotierNetwork $network) {
+            Cache::forget("team_{$network->team_id}_networks_{$network->zerotier_token_id}");
+            Cache::forget("network_{$network->id}_members");
+            Cache::forget("zt_controller_networks_{$network->zerotier_token_id}");
+            Cache::forget("zt_stats_authorised_{$network->team_id}");
+            Cache::forget('zt_stats_authorised_all');
         });
     }
 
