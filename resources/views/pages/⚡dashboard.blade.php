@@ -121,6 +121,14 @@ new #[Title('Dashboard')] class extends Component
             </flux:card>
         </div>
 
+        @if (auth()->user()->isAdmin() && $this->untrackedStats['failed'] !== [])
+        <flux:callout variant="danger" icon="exclamation-triangle" heading="Controller unreachable">
+            <flux:callout.text>
+                Could not list networks on {{ implode(', ', $this->untrackedStats['failed']) }}, so the untracked network count may be incomplete.
+            </flux:callout.text>
+        </flux:callout>
+        @endif
+
         @if (auth()->user()->isAdmin() && $this->untrackedStats['count'] > 0)
         <flux:card class="border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
             <div class="flex items-center justify-between">

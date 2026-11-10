@@ -368,9 +368,40 @@ new #[Title('Team Settings')] class extends Component
         $this->redirect('/settings/teams');
     }
 
+    /**
+     * Whether the team shown here may be deleted by this user: its admins (or
+     * a system admin), but never the system admin team, whose deletion would
+     * lock every system admin out.
+     */
+    public function canDeleteTeam(): bool
+    {
+        return $this->canAdminister()
+            && $this->current_team->id !== config('wiretier.admin_team');
+    }
+
+    /** What deleting this team takes with it, shown in the confirm modal. */
+    #[Computed]
+    public function deletionImpact(): array
+    {
+        return [
+            'users' => $this->current_team->countUsers(),
+            'networks' => ZerotierNetwork::where('team_id', $this->current_team->id)->count(),
+        ];
+    }
+
+    public function deleteTeamModal(): void
+    {
+        if (! $this->canDeleteTeam()) {
+            return;
+        }
+
+        unset($this->deletionImpact);
+        Flux::modal('deleteTeamConfirm')->show();
+    }
+
     public function deleteTeam()
     {
-        if (! $this->canAdminister()) {
+        if (! $this->canDeleteTeam()) {
             return;
         }
 
@@ -390,6 +421,7 @@ new #[Title('Team Settings')] class extends Component
 
             TeamUser::where('team_id', $teamId)->delete();
             TeamInvitation::where('team_id', $teamId)->delete();
+            User::where('current_team', $teamId)->update(['current_team' => null]);
             Team::where('id', $teamId)->delete();
         });
 
@@ -576,14 +608,14 @@ new #[Title('Team Settings')] class extends Component
         </flux:card>
         @endif
 
-        {{-- Delete Team (Admin only, empty team only) --}}
-        @if (auth()->user()->isAdmin() && $current_team->id != auth()->user()->current_team && $current_team->countUsers() === 0)
+        {{-- Delete Team (team admins; never the system admin team) --}}
+        @if ($this->canDeleteTeam())
         <flux:card class="mb-6">
             <flux:heading>Delete Team</flux:heading>
-            <flux:subheading>Permanently delete this team and all associated records.</flux:subheading>
+            <flux:subheading>Permanently delete this team, its memberships and invitations. Its networks are kept on the controller and become untracked.</flux:subheading>
             <div class="flex mt-4">
                 <flux:spacer />
-                <flux:button variant="danger" wire:click="deleteTeam">Delete</flux:button>
+                <flux:button variant="danger" wire:click="deleteTeamModal">Delete</flux:button>
             </div>
         </flux:card>
         @endif
@@ -643,6 +675,27 @@ new #[Title('Team Settings')] class extends Component
             <flux:button variant="danger" wire:click="removeUser">Remove</flux:button>
         </div>
     </flux:modal>
+
+    @if ($this->canDeleteTeam())
+    <flux:modal name="deleteTeamConfirm" focusable class="max-w-sm">
+        <div class="text-center">
+            <flux:heading size="lg">Delete Team?</flux:heading>
+            <flux:subheading class="mt-2">
+                This permanently deletes the <strong>{{ $current_team->name }}</strong> team and removes its
+                {{ $this->deletionImpact['users'] }} {{ Str::plural('member', $this->deletionImpact['users']) }}.
+                @if ($this->deletionImpact['networks'] > 0)
+                    Its {{ $this->deletionImpact['networks'] }} {{ Str::plural('network', $this->deletionImpact['networks']) }}
+                    stay on the controller, but only a system admin can import them into another team.
+                @endif
+                This cannot be undone.
+            </flux:subheading>
+        </div>
+        <div class="flex justify-end space-x-2 mt-4">
+            <flux:modal.close><flux:button variant="filled">Cancel</flux:button></flux:modal.close>
+            <flux:button variant="danger" wire:click="deleteTeam">Delete Team</flux:button>
+        </div>
+    </flux:modal>
+    @endif
 
     <flux:modal name="leaveTeamConfirm" focusable class="max-w-sm">
         <div class="text-center">

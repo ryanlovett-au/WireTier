@@ -423,7 +423,8 @@ new class extends Component
 
         $network = $query->first();
 
-        return ($network && $network->zerotierToken) ? $network : null;
+        // A disabled controller is off limits, like a missing one.
+        return ($network && $network->zerotierToken?->is_active) ? $network : null;
     }
 
     /** Validation rule: an IPv4/IPv6 CIDR such as 10.0.0.0/24 or fd00::/8. */

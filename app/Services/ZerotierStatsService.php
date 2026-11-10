@@ -48,49 +48,63 @@ class ZerotierStatsService
     }
 
     /**
-     * Get count of untracked networks across all active controllers.
-     * Cached per token for 60 seconds to avoid hammering the API on every dashboard load.
+     * Count networks on the active controllers that no team tracks.
      *
-     * Returns ['count' => int, 'last_updated' => ?int]
+     * Each controller's network list is cached for 60 seconds. A failed call
+     * is cached as a failure for 30 seconds (so a dead controller doesn't
+     * stall every dashboard load) and reported in 'failed', instead of being
+     * mistaken for a controller with no untracked networks.
+     *
+     * @return array{count: int, last_updated: ?int, failed: list<string>}
      */
     public static function untrackedNetworks(): array
     {
         $tokens = ZerotierToken::where('is_active', true)->get();
-        $trackedIds = ZerotierNetwork::pluck('network_id')->toArray();
-        $allControllerNetworkIds = [];
+        $tracked = array_flip(ZerotierNetwork::pluck('network_id')->all());
+        $untracked = [];
+        $failed = [];
+        $checkedAt = null;
 
         foreach ($tokens as $token) {
-            $controllerNetworks = Cache::remember(
-                "zt_controller_networks_{$token->id}",
-                60,
-                function () use ($token) {
-                    Cache::put('zt_untracked_last_updated', now()->timestamp, 120);
+            $result = Cache::get("zt_controller_networks_{$token->id}");
 
-                    try {
-                        $service = new ZerotierService($token);
-
-                        return $service->getControllerNetworks();
-                    } catch (\Exception) {
-                        return [];
-                    }
-                }
-            );
-
-            foreach ($controllerNetworks as $networkId) {
-                $allControllerNetworkIds[$networkId] = true;
+            if (! is_array($result) || ! array_key_exists('ok', $result)) {
+                $result = self::fetchControllerNetworks($token);
+                Cache::put("zt_controller_networks_{$token->id}", $result, $result['ok'] ? 60 : 30);
             }
-        }
 
-        $untrackedCount = 0;
-        foreach (array_keys($allControllerNetworkIds) as $networkId) {
-            if (! in_array($networkId, $trackedIds)) {
-                $untrackedCount++;
+            if (! $result['ok']) {
+                $failed[] = $token->name;
+
+                continue;
+            }
+
+            $checkedAt = $checkedAt === null ? $result['at'] : min($checkedAt, $result['at']);
+            foreach ($result['ids'] as $networkId) {
+                if (! isset($tracked[$networkId])) {
+                    $untracked[$networkId] = true;
+                }
             }
         }
 
         return [
-            'count' => $untrackedCount,
-            'last_updated' => Cache::get('zt_untracked_last_updated'),
+            'count' => count($untracked),
+            'last_updated' => $checkedAt,
+            'failed' => $failed,
         ];
+    }
+
+    /** @return array{ok: bool, ids: list<string>, at: int} */
+    private static function fetchControllerNetworks(ZerotierToken $token): array
+    {
+        try {
+            $ids = (new ZerotierService($token))->getControllerNetworks();
+
+            return ['ok' => true, 'ids' => array_values(array_filter($ids, 'is_string')), 'at' => now()->timestamp];
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['ok' => false, 'ids' => [], 'at' => now()->timestamp];
+        }
     }
 }

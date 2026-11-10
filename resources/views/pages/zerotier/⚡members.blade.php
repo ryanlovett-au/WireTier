@@ -132,7 +132,7 @@ new #[Title('Network Members')] class extends Component
     {
         $network = $this->getDbNetwork();
 
-        abort_unless($network && $network->zerotierToken, 403);
+        abort_unless($network && $network->zerotierToken?->is_active, 403, 'This controller is disabled.');
 
         return new ZerotierService($network->zerotierToken);
     }

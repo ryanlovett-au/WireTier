@@ -37,4 +37,36 @@ test('untrackedNetworks handles API failure gracefully', function () {
 
     $result = ZerotierStatsService::untrackedNetworks();
     expect($result['count'])->toBe(0);
+    expect($result['failed'])->not->toBeEmpty();
+});
+
+test('a failed controller call is reported and retried rather than cached as zero', function () {
+    $calls = 0;
+    $down = true;
+    Http::fake(function ($request) use (&$calls, &$down) {
+        if (! str_contains($request->url(), '/controller/network')) {
+            return Http::response([]);
+        }
+        $calls++;
+
+        return $down
+            ? Http::response('controller down', 500)
+            : Http::response(['untracked0000001']);
+    });
+
+    $first = ZerotierStatsService::untrackedNetworks();
+    expect($first['failed'])->not->toBeEmpty();
+    expect($first['count'])->toBe(0);
+
+    // Within the failure window the dead controller is not hit again.
+    $callsAfterFirst = $calls;
+    ZerotierStatsService::untrackedNetworks();
+    expect($calls)->toBe($callsAfterFirst);
+
+    // Once the failure entry expires, a recovered controller is counted.
+    $down = false;
+    $this->travel(31)->seconds();
+    $recovered = ZerotierStatsService::untrackedNetworks();
+    expect($recovered['failed'])->toBe([]);
+    expect($recovered['count'])->toBe(1);
 });

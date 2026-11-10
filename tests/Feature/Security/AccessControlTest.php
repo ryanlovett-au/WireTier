@@ -10,6 +10,7 @@ use App\Models\TeamInvitation;
 use App\Models\TeamUser;
 use App\Models\User;
 use App\Models\ZerotierNetwork;
+use App\Models\ZerotierToken;
 use Database\Seeders\SecurityTestSeeder as S;
 use Illuminate\Support\Facades\Http;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
@@ -279,3 +280,73 @@ test('team colour and icon allow-lists cannot be extended from the client', func
     Livewire::test('pages::settings.teams')
         ->set('icons', ['../../evil']);
 })->throws(CannotUpdateLockedPropertyException::class);
+
+// ─── Team deletion ───────────────────────────────────────────────────────
+
+test('the system admin team cannot be deleted, even by a system admin', function () {
+    $this->actingAs($this->superAdmin);
+
+    Livewire::test('pages::settings.team', ['id' => S::ADMIN_TEAM_ID])
+        ->call('deleteTeamModal')
+        ->call('deleteTeam');
+
+    expect(Team::find(S::ADMIN_TEAM_ID))->not->toBeNull();
+});
+
+test('a team admin is offered team deletion behind a confirm modal', function () {
+    $this->actingAs($this->alphaAdmin);
+
+    Livewire::test('pages::settings.team', ['id' => S::ALPHA_TEAM_ID])
+        ->assertSeeHtml('wire:click="deleteTeamModal"')
+        ->call('deleteTeamModal')
+        ->assertSee('Delete Team?');
+
+    expect(Team::find(S::ALPHA_TEAM_ID))->not->toBeNull();
+});
+
+test('a team member is not offered team deletion', function () {
+    $this->actingAs($this->alphaMember);
+
+    Livewire::test('pages::settings.team', ['id' => S::ALPHA_TEAM_ID])
+        ->assertDontSeeHtml('deleteTeamModal')
+        ->assertDontSee('Delete Team?');
+});
+
+test('deleting a team clears it as the current team of its former members', function () {
+    $this->actingAs($this->alphaAdmin);
+
+    Livewire::test('pages::settings.team', ['id' => S::ALPHA_TEAM_ID])
+        ->call('deleteTeam')
+        ->assertRedirect('/settings/teams');
+
+    expect(User::where('current_team', S::ALPHA_TEAM_ID)->exists())->toBeFalse();
+});
+
+// ─── Disabled controllers ────────────────────────────────────────────────
+
+test('networks cannot be created on a disabled controller', function () {
+    ZerotierToken::where('id', S::ALPHA_TOKEN_ID)->update(['is_active' => false]);
+    $this->actingAs($this->alphaAdmin);
+
+    Livewire::test('pages::zerotier.networks')
+        ->set('selectedToken', S::ALPHA_TOKEN_ID)
+        ->set('new_network_name', 'Sneaky')
+        ->set('new_network_subnet', '10.42.0.0/24')
+        ->call('createNetwork');
+
+    Http::assertNotSent(fn ($request) => $request->method() === 'POST');
+    expect(ZerotierNetwork::where('name', 'Sneaky')->exists())->toBeFalse();
+});
+
+test('networks on a disabled controller are not listed or editable', function () {
+    ZerotierToken::where('id', S::ALPHA_TOKEN_ID)->update(['is_active' => false]);
+    $this->actingAs($this->alphaAdmin);
+
+    Livewire::test('pages::zerotier.networks')
+        ->set('selectedToken', S::ALPHA_TOKEN_ID)
+        ->assertSet('networks', []);
+
+    Livewire::test('pages::zerotier.network-edit-modal')
+        ->call('open', S::ALPHA_NETWORK_ID, S::ALPHA_TOKEN_ID)
+        ->assertSet('editing_network_id', '');
+});

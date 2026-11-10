@@ -34,6 +34,20 @@ class ZerotierToken extends Model
         ];
     }
 
+    /**
+     * An enabled controller by id, or null. Disabling a controller means
+     * WireTier stops talking to it, so every controller call resolves its
+     * token through this rather than find()/findOrFail().
+     */
+    public static function findActive(mixed $id): ?self
+    {
+        if (! is_string($id) || $id === '') {
+            return null;
+        }
+
+        return static::where('is_active', true)->find($id);
+    }
+
     public function networks(): HasMany
     {
         return $this->hasMany(ZerotierNetwork::class);

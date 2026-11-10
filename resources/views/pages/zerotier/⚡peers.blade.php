@@ -42,7 +42,10 @@ new #[Title('Node Status & Peers')] class extends Component
 
         $tokenId = $this->selectedToken;
 
-        $token = ZerotierToken::findOrFail($tokenId);
+        $token = ZerotierToken::findActive($tokenId);
+        if (! $token) {
+            return;
+        }
         $this->selectedTokenName = $token->name;
         $service = new ZerotierService($token);
 

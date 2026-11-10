@@ -104,7 +104,9 @@ new #[Title('ZeroTier Networks')] class extends Component
 
     public function loadNetworks(): void
     {
-        if (empty($this->selectedToken)) {
+        if (empty($this->selectedToken) || ! ZerotierToken::findActive($this->selectedToken)) {
+            $this->networks = [];
+
             return;
         }
 
@@ -184,7 +186,9 @@ new #[Title('ZeroTier Networks')] class extends Component
             return;
         }
 
-        $token = ZerotierToken::findOrFail($this->selectedToken);
+        if (! $token = $this->activeToken()) {
+            return;
+        }
         $service = new ZerotierService($token);
 
         try {
@@ -248,7 +252,9 @@ new #[Title('ZeroTier Networks')] class extends Component
             return;
         }
 
-        $token = ZerotierToken::findOrFail($this->selectedToken);
+        if (! $token = $this->activeToken()) {
+            return;
+        }
         $service = new ZerotierService($token);
 
         try {
@@ -302,7 +308,9 @@ new #[Title('ZeroTier Networks')] class extends Component
             return;
         }
 
-        $token = ZerotierToken::findOrFail($this->selectedToken);
+        if (! $token = $this->activeToken()) {
+            return;
+        }
         $service = new ZerotierService($token);
 
         try {
@@ -356,7 +364,9 @@ new #[Title('ZeroTier Networks')] class extends Component
             }],
         ]);
 
-        $token = ZerotierToken::findOrFail($this->selectedToken);
+        if (! $token = $this->activeToken()) {
+            return;
+        }
         $service = new ZerotierService($token);
 
         try {
@@ -420,6 +430,18 @@ new #[Title('ZeroTier Networks')] class extends Component
     /**
      * A network on the selected controller owned by the user's current team.
      */
+    /** The selected controller if it is enabled; toasts and returns null otherwise. */
+    protected function activeToken(): ?ZerotierToken
+    {
+        $token = ZerotierToken::findActive($this->selectedToken);
+
+        if (! $token) {
+            Flux::toast(variant: 'danger', heading: 'Controller unavailable', text: 'That controller is disabled or no longer exists.');
+        }
+
+        return $token;
+    }
+
     protected function ownedNetwork(string $networkId): ?ZerotierNetwork
     {
         $team = auth()->user()->team;
@@ -432,7 +454,7 @@ new #[Title('ZeroTier Networks')] class extends Component
             ->where('network_id', $networkId)
             ->where('zerotier_token_id', $this->selectedToken)
             ->where('team_id', $team->id)
-            ->whereHas('zerotierToken')
+            ->whereHas('zerotierToken', fn ($q) => $q->where('is_active', true))
             ->first();
     }
 
