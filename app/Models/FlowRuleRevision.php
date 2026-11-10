@@ -19,7 +19,7 @@ class FlowRuleRevision extends Model
     public $incrementing = false;
 
     protected $fillable = [
-        'zerotier_network_id', 'user_id', 'source', 'meta', 'hash',
+        'zerotier_network_id', 'network_id', 'user_id', 'source', 'meta', 'hash',
         'rule_count', 'capability_count', 'tag_count',
     ];
 

@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Services\FlowRules\FlowRuleCompiler;
 use App\Services\FlowRules\RulesFingerprint;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class ZerotierNetwork extends Model
@@ -73,6 +75,82 @@ class ZerotierNetwork extends Model
         }
 
         return RulesFingerprint::isDefault($live) ? 'default' : 'unmanaged';
+    }
+
+    /**
+     * Drop WireTier's record of the network (members included) without
+     * touching the controller, keeping its rules history by network ID so a
+     * later import gets the scripts back (see restoreReleasedRules()). Used
+     * when the owning team is deleted.
+     */
+    public function release(): void
+    {
+        DB::transaction(function () {
+            $this->snapshotCurrentRules();
+
+            FlowRuleRevision::where('zerotier_network_id', $this->id)
+                ->update(['zerotier_network_id' => null, 'network_id' => $this->network_id]);
+
+            $this->members()->delete();
+            $this->delete();
+        });
+    }
+
+    /**
+     * Re-attach history released by a deleted team and restore its newest
+     * script. If the live rules changed since, the network reads as drifted.
+     */
+    public function restoreReleasedRules(): void
+    {
+        $released = FlowRuleRevision::whereNull('zerotier_network_id')->where('network_id', $this->network_id);
+
+        if (! $released->exists()) {
+            return;
+        }
+
+        $released->update(['zerotier_network_id' => $this->id]);
+        $latest = $this->ruleRevisions()->first();
+
+        $this->update([
+            'rules_source' => $latest->source,
+            'rules_meta' => $latest->meta,
+            'rules_hash' => $latest->hash,
+            'rules_updated_at' => $latest->created_at,
+        ]);
+    }
+
+    /** Make sure the script in use is in the history (it isn't if it predates history). */
+    protected function snapshotCurrentRules(): void
+    {
+        if ($this->rules_source === null) {
+            return;
+        }
+
+        $latest = $this->ruleRevisions()->first();
+
+        if ($latest && $latest->source === $this->rules_source && $latest->hash === $this->rules_hash) {
+            return;
+        }
+
+        try {
+            $ruleCount = count(FlowRuleCompiler::compile($this->rules_source)->rules);
+        } catch (\Throwable) {
+            $ruleCount = 0;
+        }
+
+        $revision = new FlowRuleRevision([
+            'zerotier_network_id' => $this->id,
+            'network_id' => $this->network_id,
+            'user_id' => null,
+            'source' => $this->rules_source,
+            'meta' => $this->rules_meta,
+            'hash' => (string) $this->rules_hash,
+            'rule_count' => $ruleCount,
+            'capability_count' => count($this->rules_meta['capabilities'] ?? []),
+            'tag_count' => count($this->rules_meta['tags'] ?? []),
+        ]);
+        $revision->created_at = $this->rules_updated_at ?? now();
+        $revision->save();
     }
 
     /** Rules scripts applied by WireTier, newest first. */

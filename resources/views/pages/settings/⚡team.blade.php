@@ -477,13 +477,13 @@ new #[Title('Team Settings')] class extends Component
         // Release the team's networks: drop WireTier's records (not the
         // networks on the controller) so they reappear as untracked for a
         // system admin to import into another team, instead of being orphaned
-        // under a team that no longer exists.
+        // under a team that no longer exists. Their rules history is kept and
+        // comes back with the import.
         $networks = ZerotierNetwork::where('team_id', $teamId)->get();
 
         DB::transaction(function () use ($teamId, $networks) {
             foreach ($networks as $network) {
-                $network->members()->delete();
-                $network->delete();
+                $network->release();
             }
 
             TeamUser::where('team_id', $teamId)->delete();
@@ -810,7 +810,7 @@ new #[Title('Team Settings')] class extends Component
                 {{ $this->deletionImpact['users'] }} {{ Str::plural('member', $this->deletionImpact['users']) }}.
                 @if ($this->deletionImpact['networks'] > 0)
                     {{ $this->deletionImpact['networks'] === 1 ? 'Its network stays' : 'Its '.$this->deletionImpact['networks'].' networks stay' }}
-                    on the controller, but only a system admin can import {{ $this->deletionImpact['networks'] === 1 ? 'it' : 'them' }} into another team.
+                    on the controller, but only a system admin can import {{ $this->deletionImpact['networks'] === 1 ? 'it' : 'them' }} into another team. Flow rules and their history come back with the import.
                 @endif
                 This cannot be undone.
             </flux:subheading>

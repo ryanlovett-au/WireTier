@@ -5,6 +5,8 @@ namespace App\Services\FlowRules;
 use App\Models\FlowRuleRevision;
 use App\Models\ZerotierNetwork;
 use App\Services\ZerotierService;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Compiles a rules script and applies it to a network's controller, keeping
@@ -12,8 +14,12 @@ use App\Services\ZerotierService;
  */
 class FlowRulesService
 {
-    /** Upper bound on a rules script, well above anything the controller can hold. */
-    public const MAX_SOURCE_LENGTH = 65535;
+    /**
+     * Upper bound on a rules script in bytes, well above anything the
+     * controller can hold. Bytes, not characters: the script is stored in
+     * TEXT columns, which hold 65,535 bytes.
+     */
+    public const MAX_SOURCE_BYTES = 65535;
 
     /** Starting point offered in the editor. */
     public const EXAMPLE_SOURCE = <<<'RULES'
@@ -58,13 +64,15 @@ RULES;
 
     /**
      * Compile and apply $source to the network. Throws FlowRuleCompileException
-     * for an invalid script (nothing is sent), or the HTTP client's exception
-     * if the controller rejects the update (nothing is stored).
+     * for an invalid script (nothing is sent), the HTTP client's exception if
+     * the controller rejects the update (nothing is changed), or
+     * FlowRulesNotRecordedException if the controller accepted the rules but
+     * WireTier could not store them (the rules ARE live).
      */
     public function apply(ZerotierNetwork $network, string $source, ?ZerotierService $service = null): CompiledRules
     {
-        if (mb_strlen($source) > self::MAX_SOURCE_LENGTH) {
-            throw new FlowRuleCompileException('The rules script is longer than '.self::MAX_SOURCE_LENGTH.' characters.', 0, 0);
+        if (strlen($source) > self::MAX_SOURCE_BYTES) {
+            throw new FlowRuleCompileException(self::tooLargeMessage(), 0, 0);
         }
 
         $compiled = FlowRuleCompiler::compile($source);
@@ -72,24 +80,37 @@ RULES;
         $service ??= new ZerotierService($network->zerotierToken);
         $live = $service->updateNetwork($network->network_id, $compiled->toNetworkConfig());
 
-        // Fingerprint the controller's normalised copy (see RulesFingerprint).
-        if (! isset($live['rules'])) {
-            $live = $service->getControllerNetwork($network->network_id);
+        // From here the rules are live on the controller: a failure must not
+        // be reported as "nothing changed".
+        try {
+            // Fingerprint the controller's normalised copy (see RulesFingerprint).
+            if (! isset($live['rules'])) {
+                $live = $service->getControllerNetwork($network->network_id);
+            }
+
+            $hash = RulesFingerprint::of($live);
+
+            DB::transaction(function () use ($network, $source, $compiled, $hash, $live) {
+                $network->update([
+                    'config' => array_merge($network->config ?? [], $live),
+                    'rules_source' => $source,
+                    'rules_meta' => $compiled->metadata(),
+                    'rules_hash' => $hash,
+                    'rules_updated_at' => now(),
+                ]);
+
+                $this->recordRevision($network, $source, $compiled, $hash);
+            });
+        } catch (Throwable $e) {
+            throw new FlowRulesNotRecordedException("Rules applied to {$network->network_id} but not recorded: {$e->getMessage()}", 0, $e);
         }
 
-        $hash = RulesFingerprint::of($live);
-
-        $network->update([
-            'config' => array_merge($network->config ?? [], $live),
-            'rules_source' => $source,
-            'rules_meta' => $compiled->metadata(),
-            'rules_hash' => $hash,
-            'rules_updated_at' => now(),
-        ]);
-
-        $this->recordRevision($network, $source, $compiled, $hash);
-
         return $compiled;
+    }
+
+    public static function tooLargeMessage(): string
+    {
+        return 'The rules script is larger than 64 KB ('.number_format(self::MAX_SOURCE_BYTES).' bytes).';
     }
 
     /** Keep the applied script in the network's history, pruning the oldest. */
@@ -97,6 +118,7 @@ RULES;
     {
         FlowRuleRevision::create([
             'zerotier_network_id' => $network->id,
+            'network_id' => $network->network_id,
             'user_id' => auth()->id(),
             'source' => $source,
             'meta' => $compiled->metadata(),

@@ -9,6 +9,7 @@ use App\Services\FlowRules\FlowRuleCompileException;
 use App\Services\FlowRules\FlowRuleCompiler;
 use App\Services\FlowRules\FlowRuleDecompileException;
 use App\Services\FlowRules\FlowRuleDecompiler;
+use App\Services\FlowRules\FlowRulesNotRecordedException;
 use App\Services\FlowRules\FlowRulesService;
 use App\Services\ZerotierService;
 use Illuminate\Support\Facades\Cache;
@@ -531,8 +532,8 @@ new class extends Component
         $this->rules_summary = '';
         $this->rules_preview = '';
 
-        if (mb_strlen($this->rules_source) > FlowRulesService::MAX_SOURCE_LENGTH) {
-            $this->rules_error = 'The rules script is longer than '.FlowRulesService::MAX_SOURCE_LENGTH.' characters.';
+        if (strlen($this->rules_source) > FlowRulesService::MAX_SOURCE_BYTES) {
+            $this->rules_error = FlowRulesService::tooLargeMessage();
 
             return;
         }
@@ -629,6 +630,17 @@ new class extends Component
         } catch (FlowRuleCompileException $e) {
             $this->rules_error = $e->describe();
             Flux::toast(variant: 'danger', heading: 'Rules Not Saved', text: 'Fix the errors in the rules script first.');
+
+            return;
+        } catch (FlowRulesNotRecordedException $e) {
+            report($e);
+            AuditLog::record('network.rules_updated', 'network', $this->editing_network_id, [
+                'name' => $dbNetwork->name,
+                'recorded' => false,
+            ]);
+            Flux::modal('editNetworkModal')->close();
+            Flux::toast(variant: 'warning', heading: 'Rules Applied, Not Recorded', duration: 0, text: 'The new rules are live on the network, but WireTier could not record them. The network will show its rules as changed outside WireTier; use Load live rules to bring them back into the editor.');
+            $this->dispatch('network-updated', networkId: $this->editing_network_id);
 
             return;
         } catch (Exception $e) {

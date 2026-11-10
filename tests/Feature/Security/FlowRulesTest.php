@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\ZerotierMember;
 use App\Models\ZerotierNetwork;
 use App\Services\FlowRules\FlowRuleDecompiler;
+use App\Services\FlowRules\FlowRulesNotRecordedException;
 use App\Services\FlowRules\FlowRulesService;
 use App\Services\FlowRules\RulesFingerprint;
 use App\Services\ZerotierSyncService;
@@ -359,6 +360,99 @@ test('deleting a network deletes its rules history', function () {
     app(FlowRulesService::class)->apply($this->network->fresh(), SSH_RULES);
 
     $this->network->fresh()->delete();
+
+    expect(FlowRuleRevision::count())->toBe(0);
+});
+
+test('rules the controller accepted but WireTier failed to record are not reported as unchanged', function () {
+    // The controller takes the rules, then the local write fails.
+    FlowRuleRevision::creating(fn () => throw new RuntimeException('database went away'));
+
+    expect(fn () => app(FlowRulesService::class)->apply($this->network->fresh(), SSH_RULES))
+        ->toThrow(FlowRulesNotRecordedException::class);
+
+    // The rules are live, the local write was rolled back as a whole, so the
+    // network reads as changed outside WireTier rather than half-recorded.
+    expect($this->controller['capabilities'])->not->toBeEmpty();
+    $network = $this->network->fresh();
+    expect($network->rules_source)->toBeNull();
+    expect(FlowRuleRevision::count())->toBe(0);
+    expect($network->rulesState($this->controller))->toBe('unmanaged');
+});
+
+test('the editor says the rules are live when they could not be recorded', function () {
+    FlowRuleRevision::creating(fn () => throw new RuntimeException('database went away'));
+
+    openRulesEditor($this->alphaAdmin)
+        ->set('rules_source', SSH_RULES)
+        ->call('saveRules')
+        ->assertDispatched('network-updated');
+
+    expect(AuditLog::where('action', 'network.rules_updated')->first()?->details)
+        ->toMatchArray(['recorded' => false]);
+});
+
+test('the script size limit counts bytes, which is what the database stores', function () {
+    // Under the limit in characters, over it in bytes.
+    $script = '# '.str_repeat('é', 40000)."\naccept;\n";
+    expect(mb_strlen($script))->toBeLessThan(FlowRulesService::MAX_SOURCE_BYTES);
+
+    openRulesEditor($this->alphaAdmin)
+        ->set('rules_source', $script)
+        ->assertSet('rules_error', FlowRulesService::tooLargeMessage())
+        ->call('saveRules');
+
+    expect($this->controller['rules'])->toBe([['type' => 'ACTION_ACCEPT']]);
+    expect($this->network->fresh()->rules_source)->toBeNull();
+});
+
+test('a network released by a deleted team gets its rules and history back on import', function () {
+    $this->actingAs($this->alphaAdmin);
+    app(FlowRulesService::class)->apply($this->network->fresh(), SSH_RULES);
+    app(FlowRulesService::class)->apply($this->network->fresh(), SSH_RULES."# second version\n");
+
+    Livewire::test('pages::settings.team', ['id' => S::ALPHA_TEAM_ID])->call('deleteTeam');
+
+    expect(ZerotierNetwork::where('network_id', S::ALPHA_NETWORK_ID)->exists())->toBeFalse();
+    expect(FlowRuleRevision::whereNull('zerotier_network_id')->where('network_id', S::ALPHA_NETWORK_ID)->count())->toBe(2);
+
+    $this->actingAs(User::where('email', 'superadmin@security-test.local')->first());
+    Livewire::test('pages::zerotier.networks')
+        ->set('selectedToken', S::ALPHA_TOKEN_ID)
+        ->set('import_team_selections', [S::ALPHA_NETWORK_ID => S::BETA_TEAM_ID])
+        ->call('importNetwork', S::ALPHA_NETWORK_ID);
+
+    $imported = ZerotierNetwork::where('network_id', S::ALPHA_NETWORK_ID)->first();
+    expect($imported->team_id)->toBe(S::BETA_TEAM_ID);
+    expect($imported->rules_source)->toBe(SSH_RULES."# second version\n");
+    expect($imported->rules_meta['capabilities'])->toHaveKey('ssh');
+    expect($imported->ruleRevisions()->count())->toBe(2);
+    expect($imported->rulesState($this->controller))->toBe('managed');
+});
+
+test('rules applied before history existed are kept when a team is deleted', function () {
+    $this->actingAs($this->alphaAdmin);
+    app(FlowRulesService::class)->apply($this->network->fresh(), SSH_RULES);
+    FlowRuleRevision::query()->delete();
+
+    Livewire::test('pages::settings.team', ['id' => S::ALPHA_TEAM_ID])->call('deleteTeam');
+
+    $kept = FlowRuleRevision::where('network_id', S::ALPHA_NETWORK_ID)->sole();
+    expect($kept->source)->toBe(SSH_RULES);
+    expect($kept->capability_count)->toBe(1);
+    expect($kept->user_id)->toBeNull();
+});
+
+test('released history is deleted when the network is deleted from the controller', function () {
+    $this->actingAs($this->alphaAdmin);
+    app(FlowRulesService::class)->apply($this->network->fresh(), SSH_RULES);
+    Livewire::test('pages::settings.team', ['id' => S::ALPHA_TEAM_ID])->call('deleteTeam');
+
+    $this->actingAs(User::where('email', 'superadmin@security-test.local')->first());
+    Livewire::test('pages::zerotier.networks')
+        ->set('selectedToken', S::ALPHA_TOKEN_ID)
+        ->set('delete_untracked_id', S::ALPHA_NETWORK_ID)
+        ->call('deleteUntrackedNetwork');
 
     expect(FlowRuleRevision::count())->toBe(0);
 });

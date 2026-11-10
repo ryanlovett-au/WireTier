@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\AuditLog;
+use App\Models\FlowRuleRevision;
 use App\Models\Team;
 use App\Models\ZerotierNetwork;
 use App\Models\ZerotierToken;
@@ -260,7 +261,7 @@ new #[Title('ZeroTier Networks')] class extends Component
         try {
             $network = $service->getControllerNetwork($networkId);
 
-            ZerotierNetwork::create([
+            $dbNetwork = ZerotierNetwork::create([
                 'team_id' => $teamId,
                 'zerotier_token_id' => $this->selectedToken,
                 'network_id' => $networkId,
@@ -268,6 +269,9 @@ new #[Title('ZeroTier Networks')] class extends Component
                 'private' => $network['private'] ?? true,
                 'config' => $network,
             ]);
+
+            // A network released by a deleted team gets its rules back.
+            $dbNetwork->restoreReleasedRules();
 
             AuditLog::record('network.imported', 'network', $networkId, ['name' => $network['name'] ?? null, 'assigned_team' => $teamId]);
 
@@ -325,6 +329,8 @@ new #[Title('ZeroTier Networks')] class extends Component
                 array_filter($this->untracked_networks, fn ($n) => $n['nwid'] !== $this->delete_untracked_id)
             );
             Cache::forget("zt_controller_networks_{$token->id}");
+            // Gone from the controller, so history kept for a re-import goes too.
+            FlowRuleRevision::whereNull('zerotier_network_id')->where('network_id', $this->delete_untracked_id)->delete();
             AuditLog::record('network.untracked_deleted', 'network', $this->delete_untracked_id);
             $this->delete_untracked_id = '';
             $this->delete_untracked_name = '';
