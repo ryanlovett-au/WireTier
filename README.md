@@ -47,9 +47,13 @@ A ZeroTier **controller** manages the membership and configuration of networks. 
 - Admins can discover untracked networks on controllers and import them to any team
 - Create new networks with subnet suggestions and IP pool configuration
 - Edit network settings: name, privacy, routes, and IP assignment pools
+- Flow rules (team admins): write rules in the ZeroTier rules language, compiled and checked as you type
+- Existing rules set by another tool are rebuilt into an editable script, so they can be adopted without changing traffic
+- Every applied script is kept in a history (last 50 per network) and can be loaded and re-saved to roll back
 
 ### Member Management
 - List all members on a network with live status: IP addresses, latency, client version, last seen
+- Grant flow rule capabilities and tags to members by name
 - Authorise and deauthorise members directly from the UI
 - Auto-refreshes every 60 seconds to keep member status current
 
@@ -68,7 +72,8 @@ A ZeroTier **controller** manages the membership and configuration of networks. 
 - Two-factor authentication (TOTP) via Laravel Fortify
 - Password reset via email
 - Session management and account deletion
-- Security headers (X-Frame-Options, HSTS, Content-Type-Options)
+- Security headers (Content-Security-Policy with per-request nonces, X-Frame-Options, HSTS, Content-Type-Options)
+- Static security audit (`php artisan security:audit`)
 - Per-user rate limiting on API calls and routes
 - Encrypted sessions by default
 
@@ -170,6 +175,7 @@ Key `.env` options:
 | `DB_CONNECTION` | Database driver (`mysql` or `sqlite`) |
 | `ADMIN_TEAM_UUID` | UUID of the team with system-wide admin privileges |
 | `MAIL_MAILER` | Mailer for invitations and notifications (e.g. `smtp`, `log`) |
+| `WIRETIER_CSP` | Content-Security-Policy mode: `enforce` (default), `report-only` or `off` |
 
 Additional configuration (team roles, permissions, grace periods) is in `config/wiretier.php`.
 

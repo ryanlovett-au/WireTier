@@ -42,6 +42,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Content Security Policy
+    |--------------------------------------------------------------------------
+    |
+    | How the Content-Security-Policy header is sent (see SecurityHeaders).
+    |
+    |   enforce      - browsers block anything the policy doesn't allow (default)
+    |   report-only  - violations are only logged in the browser console
+    |   off          - no policy is sent
+    |
+    */
+    'csp' => env('WIRETIER_CSP', 'enforce'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Team Roles
     |--------------------------------------------------------------------------
     |

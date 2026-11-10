@@ -684,8 +684,8 @@ new #[Title('Team Settings')] class extends Component
                 This permanently deletes the <strong>{{ $current_team->name }}</strong> team and removes its
                 {{ $this->deletionImpact['users'] }} {{ Str::plural('member', $this->deletionImpact['users']) }}.
                 @if ($this->deletionImpact['networks'] > 0)
-                    Its {{ $this->deletionImpact['networks'] }} {{ Str::plural('network', $this->deletionImpact['networks']) }}
-                    stay on the controller, but only a system admin can import them into another team.
+                    {{ $this->deletionImpact['networks'] === 1 ? 'Its network stays' : 'Its '.$this->deletionImpact['networks'].' networks stay' }}
+                    on the controller, but only a system admin can import {{ $this->deletionImpact['networks'] === 1 ? 'it' : 'them' }} into another team.
                 @endif
                 This cannot be undone.
             </flux:subheading>

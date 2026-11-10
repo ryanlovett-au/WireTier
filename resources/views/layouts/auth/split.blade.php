@@ -38,6 +38,6 @@
                 </div>
             </div>
         </div>
-        @fluxScripts
+        @fluxScripts(['nonce' => Vite::cspNonce()])
     </body>
 </html>
