@@ -124,7 +124,8 @@ class ZerotierService
         }
 
         self::validatePathSegment($nodeAddress, 'nodeAddress');
-        $response = $this->client()->post("/controller/network/{$nodeAddress}______", $config ?? []);
+        // Throw on failure so a rejected create surfaces as the controller's error.
+        $response = $this->client()->post("/controller/network/{$nodeAddress}______", $config ?? [])->throw();
 
         return $response->json() ?? [];
     }

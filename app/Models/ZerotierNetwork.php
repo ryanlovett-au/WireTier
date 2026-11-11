@@ -37,12 +37,16 @@ class ZerotierNetwork extends Model
 
         // The network list, dashboard counts and untracked count are cached;
         // without this a deleted network stays listed until they expire.
+        // After commit: inside a transaction (e.g. team deletion), clearing
+        // earlier lets another request re-cache the rows before they're gone.
         static::deleted(function (ZerotierNetwork $network) {
-            Cache::forget("team_{$network->team_id}_networks_{$network->zerotier_token_id}");
-            Cache::forget("network_{$network->id}_members");
-            Cache::forget("zt_controller_networks_{$network->zerotier_token_id}");
-            Cache::forget("zt_stats_authorised_{$network->team_id}");
-            Cache::forget('zt_stats_authorised_all');
+            DB::afterCommit(function () use ($network) {
+                Cache::forget("team_{$network->team_id}_networks_{$network->zerotier_token_id}");
+                Cache::forget("network_{$network->id}_members");
+                Cache::forget("zt_controller_networks_{$network->zerotier_token_id}");
+                Cache::forget("zt_stats_authorised_{$network->team_id}");
+                Cache::forget('zt_stats_authorised_all');
+            });
         });
     }
 

@@ -129,20 +129,6 @@ test('ZerotierToken encrypts token in database', function () {
 
 // ─── Raw SQL Safety ──────────────────────────────────────────────────────
 
-test('whereRaw in User model does not interpolate user input', function () {
-    // User::teamUser() uses whereRaw('1 = 0') — this is a static string, no user input
-    $content = File::get(app_path('Models/User.php'));
-
-    // Find all whereRaw calls and ensure they only contain static strings
-    preg_match_all('/whereRaw\([\'"]([^"\']+)[\'"]\)/', $content, $matches);
-
-    foreach ($matches[1] as $rawSql) {
-        // The raw SQL should not contain any variable interpolation markers
-        expect($rawSql)->not->toContain('$', "whereRaw contains variable interpolation: {$rawSql}");
-        expect($rawSql)->not->toContain('{', "whereRaw contains variable interpolation: {$rawSql}");
-    }
-});
-
 test('no raw SQL with variable interpolation exists in models', function () {
     $modelFiles = glob(app_path('Models/*.php'));
 

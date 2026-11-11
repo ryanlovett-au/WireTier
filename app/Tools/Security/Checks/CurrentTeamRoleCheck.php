@@ -10,7 +10,7 @@ use App\Tools\Security\AuditReport;
  * A role checked on the user's *current* team while the component acts on a
  * team of its own choosing.
  *
- * User::isTeamAdmin(), canManageNetworks() and the teamUser relation all read
+ * User::isTeamAdmin(), canManageNetworks() and currentMembership() all read
  * the role the user holds in their current team. A page that loads some other
  * team (e.g. /settings/team/{id} into `public Team $current_team`) and gates
  * its actions with those helpers lets an admin of their current team act on
@@ -26,7 +26,7 @@ final class CurrentTeamRoleCheck
     public const CATEGORY = 'Current-Team Role Check';
 
     /** Role helpers that answer for the current team only. */
-    private const CURRENT_TEAM_HELPERS = '/->(isTeamAdmin|canManageNetworks)\s*\(\s*\)|->teamUser\b/';
+    private const CURRENT_TEAM_HELPERS = '/->(isTeamAdmin|canManageNetworks|currentMembership)\s*\(\s*\)|->teamUser\b/';
 
     /** Role checks that take the team being acted on. */
     private const TEAM_SPECIFIC_GATES = '/canAdministerTeam\s*\(|belongsToTeam\s*\(|isTeamAdminOf\s*\(/';

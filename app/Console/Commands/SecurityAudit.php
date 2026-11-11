@@ -376,7 +376,7 @@ class SecurityAudit extends Command
             return [];
         }
 
-        $checksMembership = preg_match('/TeamUser::|->teams\(\)|teamUser\b|belongsToTeam\s*\(/', $method->body);
+        $checksMembership = preg_match('/TeamUser::|->teams\(\)|teamUser\b|currentMembership\s*\(|belongsToTeam\s*\(/', $method->body);
         $checksExpiry = preg_match('/active\(\)|expires|expired/', $method->body);
 
         if ($checksMembership && $checksExpiry) {

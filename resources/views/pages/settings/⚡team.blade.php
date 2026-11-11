@@ -8,7 +8,6 @@ use App\Models\TeamInvitation;
 use App\Models\TeamUser;
 use App\Models\User;
 use App\Models\ZerotierNetwork;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Attributes\Computed;
@@ -492,12 +491,7 @@ new #[Title('Team Settings')] class extends Component
             Team::where('id', $teamId)->delete();
         });
 
-        foreach ($networks->pluck('zerotier_token_id')->unique() as $tokenId) {
-            Cache::forget("team_{$teamId}_networks_{$tokenId}");
-            Cache::forget("zt_controller_networks_{$tokenId}");
-        }
-        Cache::forget("zt_stats_authorised_{$teamId}");
-        Cache::forget('zt_stats_authorised_all');
+        // Network caches are cleared by ZerotierNetwork once this commits.
 
         AuditLog::record('team.deleted', 'team', $teamId, [
             'name' => $this->current_team->name,

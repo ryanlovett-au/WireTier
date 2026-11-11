@@ -81,12 +81,16 @@ class FortifyServiceProvider extends ServiceProvider
                 return Limit::none();
             }
 
-            // Password-reset POSTs: tight and keyed by email, so one victim's
-            // inbox can't be flooded with reset links.
+            // Password-reset POSTs: tight per email whatever the source IP, so
+            // one victim's inbox can't be flooded by rotating addresses, and
+            // per IP, so one source can't spray many inboxes.
             if ($request->is('forgot-password', 'reset-password')) {
-                $key = Str::transliterate(Str::lower((string) $request->input('email')).'|'.$request->ip());
+                $email = Str::transliterate(Str::lower(trim((string) $request->input('email'))));
 
-                return Limit::perMinute(5)->by($key);
+                return [
+                    Limit::perMinute(5)->by('reset-email:'.$email),
+                    Limit::perMinute(20)->by('reset-ip:'.$request->ip()),
+                ];
             }
 
             // Other state-changing POSTs (register, logout, 2FA setup, resend

@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Str;
@@ -57,6 +56,8 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     protected ?Team $teamMemo = null;
 
+    protected ?TeamUser $membershipMemo = null;
+
     protected ?string $teamMemoFor = null;
 
     /**
@@ -68,35 +69,54 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function getTeamAttribute(): ?Team
     {
+        $this->resolveCurrentTeamMemo();
+
+        return $this->teamMemo;
+    }
+
+    /**
+     * The membership row behind the current team (null whenever the team is),
+     * resolved together with it so the two can never disagree, including after
+     * current_team changes on the same instance.
+     */
+    public function currentMembership(): ?TeamUser
+    {
+        $this->resolveCurrentTeamMemo();
+
+        return $this->membershipMemo;
+    }
+
+    protected function resolveCurrentTeamMemo(): void
+    {
         if ($this->teamMemoFor !== null && $this->teamMemoFor === $this->current_team) {
-            return $this->teamMemo;
+            return;
         }
 
         $this->teamMemoFor = $this->current_team;
-
-        return $this->teamMemo = $this->resolveCurrentTeam();
+        [$this->teamMemo, $this->membershipMemo] = $this->resolveCurrentTeam();
     }
 
-    protected function resolveCurrentTeam(): ?Team
+    /** @return array{0: ?Team, 1: ?TeamUser} */
+    protected function resolveCurrentTeam(): array
     {
         if (is_null($this->current_team) || ! ($team = Team::find($this->current_team))) {
-            return null;
+            return [null, null];
         }
 
         $teamUser = TeamUser::where('team_id', $team->id)->where('user_id', $this->id)->first();
 
         if (! $teamUser) {
-            return null;
+            return [null, null];
         }
 
         // A team that requires two-factor authentication is closed to members
         // who haven't set it up (see RequireTeamTwoFactor for the redirect).
         if (! $this->meetsTwoFactorRequirementOf($team)) {
-            return null;
+            return [null, null];
         }
 
         if (! $teamUser->expired) {
-            return $team;
+            return [$team, $teamUser];
         }
 
         // The last remaining member of a team gets a grace period rather than
@@ -104,21 +124,10 @@ class User extends Authenticatable implements MustVerifyEmail
         if (TeamUser::where('team_id', $team->id)->count() === 1) {
             $teamUser->update(['expires' => now()->addDays(config('wiretier.last_team_member_grace'))->format('Y-m-d')]);
 
-            return $team;
+            return [$team, $teamUser];
         }
 
-        return null;
-    }
-
-    public function teamUser(): HasOne
-    {
-        if (! $this->team) {
-            return $this->hasOne(TeamUser::class)->whereRaw('1 = 0');
-        }
-
-        return $this->hasOne(TeamUser::class)
-            ->where('team_id', $this->team->id)
-            ->where('user_id', $this->id);
+        return [null, null];
     }
 
     public function teams(): HasMany
@@ -137,6 +146,8 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     protected ?bool $isAdminMemo = null;
 
+    protected ?string $isAdminMemoFor = null;
+
     /**
      * System admin: the admin team is selected AND the user still holds an
      * unexpired membership of it. Checking current_team alone would let a
@@ -148,6 +159,11 @@ class User extends Authenticatable implements MustVerifyEmail
 
         if (empty($adminTeam) || $this->current_team !== $adminTeam) {
             return false;
+        }
+
+        if ($this->isAdminMemoFor !== $this->current_team) {
+            $this->isAdminMemo = null;
+            $this->isAdminMemoFor = $this->current_team;
         }
 
         return $this->isAdminMemo ??= TeamUser::where('team_id', $adminTeam)
@@ -209,14 +225,14 @@ class User extends Authenticatable implements MustVerifyEmail
 
     public function isTeamAdmin(): bool
     {
-        $teamUser = $this->teamUser;
+        $teamUser = $this->currentMembership();
 
         return $this->isAdmin() || ($teamUser && $teamUser->role === 'admin');
     }
 
     public function canManageNetworks(): bool
     {
-        $teamUser = $this->teamUser;
+        $teamUser = $this->currentMembership();
 
         return $this->isAdmin() || ($teamUser && in_array($teamUser->role, ['admin', 'member'], true));
     }

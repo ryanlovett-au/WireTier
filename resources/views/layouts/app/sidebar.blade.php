@@ -56,7 +56,7 @@
                         </div>
                         <div class="mx-2 flex-1 min-w-0 text-left">
                             <div class="text-sm font-medium truncate text-zinc-500 dark:text-white/80 group-hover:text-zinc-800 dark:group-hover:text-white">{{ $activeTeam?->name ?? 'Select Team' }}</div>
-                            <div class="text-xs truncate text-zinc-400 dark:text-white/50">{{ ucfirst(auth()->user()->teamUser?->role ?? 'member') }}</div>
+                            <div class="text-xs truncate text-zinc-400 dark:text-white/50">{{ ucfirst(auth()->user()->currentMembership()?->role ?? 'member') }}</div>
                         </div>
                         <div class="shrink-0 ms-auto size-8 flex justify-center items-center">
                             <flux:icon name="chevrons-up-down" variant="micro" class="text-zinc-400 dark:text-white/80 group-hover:text-zinc-800 dark:group-hover:text-white" />
